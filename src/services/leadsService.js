@@ -12,6 +12,7 @@ import {
   orderBy,
   writeBatch,
   deleteDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 
 /** Bulk insert simples: shops/{shopId}/leads */
@@ -39,10 +40,13 @@ export async function addLeadsBulk(shopId, rows) {
   }
 }
 
-/** Move lead de etapa (Kanban) */
-export async function moveLeadStage(shopId, leadId, nextStage) {
+/** Move lead de etapa (Kanban) — APENAS stage/updatedAt */
+export async function moveLeadStage(shopId, leadId, toStage) {
   const ref = doc(db, "shops", shopId, "leads", leadId);
-  await updateDoc(ref, { stage: nextStage, updatedAt: new Date() });
+  await updateDoc(ref, {
+    stage: toStage,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 /** Busca leads por etapa (consulta pontual) */

@@ -1,14 +1,12 @@
 // src/hooks/useKanban.js
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { KANBAN_STAGES } from "../constants/kanbanStages";
 import { subscribeLeadsByShop, moveLeadStage } from "../services/leadsService";
 import { useRole } from "../contexts/RoleContext";
 
 function getMillis(ts) {
   if (!ts) return 0;
-  // Firestore Timestamp -> ms
   if (typeof ts.toMillis === "function") return ts.toMillis();
-  // Date | number
   return ts instanceof Date ? ts.getTime() : Number(ts) || 0;
 }
 
@@ -17,10 +15,9 @@ export function useKanban() {
   const [allLeads, setAllLeads] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // busca e campanha selecionadas
   const [q, setQ] = useState("");
-  const [campaign, setCampaign] = useState("");           // campanha selecionada
-  const [campaigns, setCampaigns] = useState([]);         // [{name, latestMs}]
+  const [campaign, setCampaign] = useState("");
+  const [campaigns, setCampaigns] = useState([]); // [{name, latestMs}]
 
   useEffect(() => {
     if (!shopId) return;
@@ -32,7 +29,7 @@ export function useKanban() {
     return () => unsub && unsub();
   }, [shopId]);
 
-  // Leva em conta papel: vendedor vê seus leads + não atribuídos
+  // Vendedor: só vê seus leads + não atribuídos
   const visibleForRole = useMemo(() => {
     if (role === "seller" && user?.uid) {
       return allLeads.filter((l) => !l.sellerUid || l.sellerUid === user.uid);
@@ -40,9 +37,8 @@ export function useKanban() {
     return allLeads;
   }, [allLeads, role, user]);
 
-  // Monta lista de campanhas e define a default (última do vendedor) quando necessário
+  // Campanhas
   useEffect(() => {
-    // agrupa por campaign
     const map = new Map();
     for (const l of visibleForRole) {
       const name = (l.campaign || "").trim() || "(sem campanha)";
@@ -53,37 +49,36 @@ export function useKanban() {
     const list = Array.from(map.values()).sort((a, b) => b.latestMs - a.latestMs);
     setCampaigns(list);
 
-    // se não houver campanha selecionada, escolhe a última
-    if (!campaign && list.length) {
-      setCampaign(list[0].name);
-    }
-    // se a campanha selecionada sumiu, volta para a mais recente
+    if (!campaign && list.length) setCampaign(list[0].name);
     if (campaign && list.length && !list.find((c) => c.name === campaign)) {
       setCampaign(list[0].name);
     }
   }, [visibleForRole]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // aplica filtro por busca e campanha
+  // Filtros
   const filtered = useMemo(() => {
     let arr = visibleForRole;
 
     if (campaign) {
       const canon = campaign.trim();
-      arr = arr.filter((l) => ((l.campaign || "").trim() || "(sem campanha)") === canon);
+      arr = arr.filter(
+        (l) => ((l.campaign || "").trim() || "(sem campanha)") === canon
+      );
     }
 
     if (q.trim()) {
       const t = q.trim().toLowerCase();
-      arr = arr.filter((l) =>
-        (l.nome || "").toLowerCase().includes(t) ||
-        (l.telefone || "").toLowerCase().includes(t) ||
-        (l.cidade || "").toLowerCase().includes(t)
+      arr = arr.filter(
+        (l) =>
+          (l.nome || "").toLowerCase().includes(t) ||
+          (l.telefone || "").toLowerCase().includes(t) ||
+          (l.cidade || "").toLowerCase().includes(t)
       );
     }
     return arr;
   }, [visibleForRole, q, campaign]);
 
-  // agrupa por etapa
+  // Agrupa por etapa
   const itemsByStage = useMemo(() => {
     const obj = Object.fromEntries(KANBAN_STAGES.map((s) => [s, []]));
     for (const lead of filtered) {
@@ -94,10 +89,27 @@ export function useKanban() {
     return obj;
   }, [filtered]);
 
-  async function onMove(leadId, toStage) {
-    if (!shopId) return;
-    await moveLeadStage(shopId, leadId, toStage);
-  }
+  // onMove resiliente: aceita (leadId, toStage) ou (fromStage, toStage, leadId)
+  const onMove = useCallback(
+    async (...args) => {
+      if (!shopId) return;
+      let leadId, toStage;
+
+      if (args.length === 2) {
+        // (leadId, toStage)
+        [leadId, toStage] = args;
+      } else if (args.length === 3) {
+        // (fromStage, toStage, leadId)
+        [, toStage, leadId] = args;
+      } else {
+        return;
+      }
+
+      // só envia os 2 campos que as rules permitem para seller
+      await moveLeadStage(shopId, leadId, toStage);
+    },
+    [shopId]
+  );
 
   const counts = useMemo(() => {
     const c = {};
