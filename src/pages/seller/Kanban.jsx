@@ -1,5 +1,5 @@
 // src/pages/seller/Kanban.jsx
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback, useRef } from "react";
 import { KANBAN_STAGES } from "../../constants/kanbanStages";
 import { useKanban } from "../../hooks/useKanban";
 import { useTemplates } from "../../hooks/useTemplates";
@@ -13,13 +13,13 @@ import {
   useSensor,
   useSensors,
   DragOverlay,
+  useDroppable,
 } from "@dnd-kit/core";
 import {
   SortableContext,
   rectSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
-import { useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 
 /* ============================= */
@@ -126,15 +126,19 @@ function TemplatePicker({ stage, templates, lead, onPick }) {
 }
 
 /* ============================= */
-/* Modal simples                 */
+/* Modal com seletor de estágio  */
 /* ============================= */
-function LeadModal({ open, onClose, lead, stage, templates }) {
+function LeadModal({ open, onClose, lead, stage, templates, onChangeStage }) {
   const [tab, setTab] = useState("dados"); // "dados" | "whats"
   const [msg, setMsg] = useState("");
+  const selectRef = useRef(null);
 
   if (!open) return null;
 
   const phoneDigits = onlyDigits(getLeadPhone(lead));
+  const stages = KANBAN_STAGES;
+  const idx = stages.indexOf(stage);
+  const proximo = idx >= 0 && idx < stages.length - 1 ? stages[idx + 1] : null;
 
   return (
     <div
@@ -146,6 +150,7 @@ function LeadModal({ open, onClose, lead, stage, templates }) {
         className="w-full max-w-2xl bg-white rounded-xl border"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Header */}
         <div
           className="px-4 py-3 border-b flex items-center justify-between"
           style={{ background: "#f8fafc" }}
@@ -153,11 +158,31 @@ function LeadModal({ open, onClose, lead, stage, templates }) {
           <div className="font-semibold">
             {getLeadDisplayName(lead)} <span className="text-neutral-500">• {stage}</span>
           </div>
-          <button className="kbA-chip" onClick={onClose}>
-            Fechar
-          </button>
+          <div className="flex items-center gap-2">
+            <select
+              ref={selectRef}
+              className="kbA-select"
+              value={stage}
+              onChange={(e) => onChangeStage?.(e.target.value)}
+              title="Alterar estágio"
+            >
+              {stages.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <button
+              className="kbA-chip"
+              disabled={!proximo}
+              onClick={() => proximo && onChangeStage?.(proximo)}
+              title="Avançar para a próxima etapa"
+            >
+              {proximo ? `Avançar → ${proximo}` : "Última etapa"}
+            </button>
+            <button className="kbA-chip" onClick={onClose}>Fechar</button>
+          </div>
         </div>
 
+        {/* Body */}
         <div className="px-4 pt-3">
           <div className="flex gap-2 mb-3">
             <button
@@ -282,7 +307,7 @@ function LeadCard({ lead }) {
 }
 
 /* ============================= */
-/* Sortable wrapper — drag no card inteiro */
+/* Sortable wrapper — drag no card inteiro, click abre modal */
 /* ============================= */
 function SortableLeadCard({ lead, stage, onOpen }) {
   const id = lead.id || lead.uid;
@@ -307,8 +332,8 @@ function SortableLeadCard({ lead, stage, onOpen }) {
       style={style}
       className="kbA-card"
       {...attributes}
-      {...listeners}       // drag no card inteiro
-      onClick={onOpen}     // clique abre modal
+      {...listeners}   // drag (com long-press)
+      onClick={onOpen} // clique simples abre modal
     >
       <LeadCard lead={lead} stage={stage} />
     </div>
@@ -316,10 +341,9 @@ function SortableLeadCard({ lead, stage, onOpen }) {
 }
 
 /* ============================= */
-/* Kanban Column  (agora DROPPABLE) */
+/* Kanban Column  (DROPPABLE)    */
 /* ============================= */
 function Column({ stage, leads, onOpenLead }) {
-  // Torna a coluna uma área "dropável"
   const { setNodeRef, isOver } = useDroppable({ id: stage });
 
   return (
@@ -358,8 +382,10 @@ function Column({ stage, leads, onOpenLead }) {
 function Board({ itemsByStage, onMove, onOpenLead }) {
   const stages = KANBAN_STAGES.filter((s) => s in (itemsByStage || {}));
 
-  // Sensores: sem activationConstraint para garantir disparo
-  const sensors = useSensors(useSensor(PointerSensor));
+  // Clique/toque rápido não ativa drag; drag só com "long-press"
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { delay: 40, tolerance: 5 } })
+  );
 
   const [activeLead, setActiveLead] = useState(null);
 
@@ -381,30 +407,22 @@ function Board({ itemsByStage, onMove, onOpenLead }) {
       (itemsByStage[fromStage] || []).find((x) => (x.id || x.uid) === id) ||
       null;
     setActiveLead(item);
-    console.debug("[DND] start", { id, fromStage });
   }
 
   function handleDragEnd(event) {
     const { active, over } = event;
-    console.debug("[DND] end", { active: active?.id, over: over?.id });
-
     setActiveLead(null);
     if (!over) return;
 
     const activeId = active.id;
     const fromStage = findStageOfId(activeId);
 
-    // over.id pode ser o id de um CARD (lead) ou o id da COLUNA (stage)
     let toStage = findStageOfId(over.id);
-    if (!toStage) {
-      // se não achou pelo card, assume que é uma coluna droppable
-      toStage = over.id;
-    }
+    if (!toStage) toStage = over.id; // drop direto na coluna
 
     if (!fromStage || !toStage) return;
-    if (fromStage === toStage) return; // ignorar reordenar (sem persistir ordem)
+    if (fromStage === toStage) return;
 
-    // chama o hook para persistir no Firestore
     onMove?.(fromStage, toStage, activeId);
   }
 
@@ -470,6 +488,17 @@ export default function Kanban() {
 
   const openLead = (lead, stage) => setModal({ open: true, lead, stage });
   const closeLead = () => setModal({ open: false, lead: null, stage: "" });
+
+  // Troca de etapa pelo modal (usa o mesmo fluxo do DnD)
+  const changeStageFromModal = useCallback(
+    async (toStage) => {
+      if (!modal.lead) return;
+      const id = modal.lead.id || modal.lead.uid;
+      await onMove(modal.stage, toStage, id);
+      setModal((m) => ({ ...m, stage: toStage })); // reflete no header do modal
+    },
+    [modal.lead, modal.stage, onMove]
+  );
 
   if (loading) {
     return (
@@ -539,13 +568,14 @@ export default function Kanban() {
         <Board itemsByStage={itemsByStage} onMove={onMove} onOpenLead={openLead} />
       </main>
 
-      {/* Modal único (dados + WhatsApp com templates) */}
+      {/* Modal único (dados + WhatsApp com templates + seletor de etapa) */}
       <LeadModal
         open={modal.open}
         onClose={closeLead}
         lead={modal.lead}
         stage={modal.stage}
         templates={templates}
+        onChangeStage={changeStageFromModal}
       />
     </div>
   );
