@@ -1,0 +1,210 @@
+/* templateswhatsapp.css */
+/* Escopo local para não vazar estilos pra outras telas */
+.tw-templates {
+  --tw-gap: 16px;
+  --tw-radius: 12px;
+  --tw-shadow: 0 6px 20px rgba(0,0,0,.06);
+  --tw-border: 1px solid rgba(0,0,0,.08);
+  --tw-muted: rgba(0,0,0,.55);
+  --tw-muted-2: rgba(0,0,0,.38);
+  --tw-accent: #0ea5e9; /* azul suave para detalhes */
+}
+
+/* Cards padrão dessa tela (respeitando sua .card existente) */
+.tw-templates .card {
+  border: var(--tw-border);
+  border-radius: var(--tw-radius);
+  box-shadow: var(--tw-shadow);
+  background: #fff;
+  padding: 16px;
+}
+
+/* Cabeçalho geral */
+.tw-templates .twt-header {
+  display: grid;
+  gap: 8px;
+}
+.tw-templates .twt-header h3 {
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+.tw-templates .twt-subtle {
+  color: var(--tw-muted);
+  line-height: 1.45;
+}
+.tw-templates .twt-tip {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--tw-muted-2);
+}
+
+/* Bloco "Novo template" */
+.tw-templates .twt-new {
+  display: grid;
+  gap: 12px;
+}
+.tw-templates .twt-section-title {
+  font-weight: 600;
+  font-size: .98rem;
+}
+
+/* Campos (inputs/textarea/select) – harmonizar visual */
+.tw-templates select,
+.tw-templates textarea,
+.tw-templates input[type="text"] {
+  width: 100%;
+  border: var(--tw-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  line-height: 1.45;
+  outline: none;
+  transition: box-shadow .15s ease, border-color .15s ease;
+  background: #fff;
+}
+.tw-templates select:focus,
+.tw-templates textarea:focus,
+.tw-templates input[type="text"]:focus {
+  border-color: rgba(14,165,233,.45);
+  box-shadow: 0 0 0 4px rgba(14,165,233,.12);
+}
+.tw-templates textarea {
+  resize: vertical;
+  min-height: 140px;
+  font-family: inherit;
+  font-size: .95rem;
+}
+
+/* Multiselect mais alto para conforto */
+.tw-templates select[multiple] {
+  min-height: 120px;
+}
+
+/* Linha de ajuda abaixo dos campos */
+.tw-templates .twt-help {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--tw-muted-2);
+}
+
+/* Chips de variáveis */
+.tw-templates .twt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tw-templates .twt-chip {
+  border: var(--tw-border);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  background: #fff;
+  transition: background .15s ease, transform .05s ease;
+}
+.tw-templates .twt-chip:hover { background: rgba(0,0,0,.04); }
+.tw-templates .twt-chip:active { transform: translateY(1px); }
+
+/* Prévia da mensagem */
+.tw-templates .twt-preview {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: #f6f7f9;
+  border: 1px solid rgba(0,0,0,.06);
+  border-left: 4px solid var(--tw-accent);
+  border-radius: 10px;
+  font-size: .92rem;
+  line-height: 1.5;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+/* Barra de ações (Salvar/Excluir/Adicionar) */
+.tw-templates .twt-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 10px;
+}
+.tw-templates .twt-btn {
+  border: var(--tw-border);
+  border-radius: 10px;
+  padding: 8px 14px;
+  background: #fff;
+  font-size: .92rem;
+  cursor: pointer;
+  transition: background .15s ease, box-shadow .15s ease, transform .05s ease;
+}
+.tw-templates .twt-btn:hover { background: rgba(0,0,0,.04); }
+.tw-templates .twt-btn:active { transform: translateY(1px); }
+
+.tw-templates .twt-btn-primary {
+  border-color: rgba(14,165,233,.35);
+  background: linear-gradient(180deg, #e6f6fe, #dff3fe);
+}
+.tw-templates .twt-btn-primary:hover {
+  background: linear-gradient(180deg, #ddf2fe, #d6f0fe);
+}
+
+.tw-templates .twt-btn-danger {
+  color: #dc2626;
+  border-color: rgba(220,38,38,.25);
+  background: linear-gradient(180deg, #fff6f6, #fff2f2);
+}
+.tw-templates .twt-btn-danger:hover {
+  background: linear-gradient(180deg, #ffefef, #ffe9e9);
+}
+
+/* Grid da listagem (cards dos templates) */
+.tw-templates .twt-grid {
+  display: grid;
+  gap: var(--tw-gap);
+}
+@media (min-width: 768px) {
+  .tw-templates .twt-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Cabeçalho do card de item com título + ações à direita */
+.tw-templates .twt-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.tw-templates .twt-item-title {
+  font-weight: 600;
+}
+
+/* Bloco de campo com label */
+.tw-templates .twt-field {
+  display: grid;
+  gap: 6px;
+}
+.tw-templates .twt-label {
+  font-size: .9rem;
+  color: #111827;
+  font-weight: 500;
+}
+
+/* Pequena separação entre seções internas */
+.tw-templates .twt-stack {
+  display: grid;
+  gap: 12px;
+}
+
+/* Estado vazio e carregando */
+.tw-templates .twt-empty,
+.tw-templates .twt-loading {
+  color: var(--tw-muted);
+}
+
+/* Melhorar a aparência do <code> no texto */
+.tw-templates code {
+  background: #f6f7f9;
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: .85rem;
+}

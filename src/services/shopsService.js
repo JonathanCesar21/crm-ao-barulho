@@ -1,36 +1,57 @@
-// src/services/shopsService.js
 import { db } from "../config/firebaseConfig";
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, serverTimestamp
 } from "firebase/firestore";
 
 /**
- * templates por loja:
- * /shops/{shopId}/templates/{stage} => { text: "...", updatedAt }
+ * Templates por loja:
+ * /shops/{shopId}/templates/{id} => { text: string, stages: string[] | ["*"], updatedAt }
  */
 
-export async function getTemplate(shopId, stage) {
-  const ref = doc(db, "shops", shopId, "templates", stage);
+export async function getTemplate(shopId, id) {
+  const ref = doc(db, "shops", shopId, "templates", id);
   const snap = await getDoc(ref);
-  return snap.exists() ? { id: stage, ...snap.data() } : null;
+  return snap.exists() ? { id, ...snap.data() } : null;
 }
 
 export async function getAllTemplates(shopId) {
-  const col = collection(db, "shops", shopId, "templates");
-  const snap = await getDocs(col);
+  const colRef = collection(db, "shops", shopId, "templates");
+  const snap = await getDocs(colRef);
   const obj = {};
-  snap.forEach(d => (obj[d.id] = d.data()));
+  snap.forEach((d) => {
+    const data = d.data() || {};
+    obj[d.id] = {
+      text: data.text || "",
+      stages: Array.isArray(data.stages) && data.stages.length ? data.stages : ["*"],
+      updatedAt: data.updatedAt || null,
+    };
+  });
   return obj;
 }
 
-export async function setTemplate(shopId, stage, text) {
-  const ref = doc(db, "shops", shopId, "templates", stage);
-  await setDoc(ref, { text: text || "", updatedAt: new Date() }, { merge: true });
+/**
+ * setTemplate agora aceita:
+ * - (shopId, id, "texto")                       -> salva { text, stages: ["*"] }
+ * - (shopId, id, { text, stages })              -> salva objeto completo
+ * - (shopId, id, "texto", ["Novo","Contato"])   -> compat
+ */
+export async function setTemplate(shopId, id, dataOrText, stagesOpt) {
+  const ref = doc(db, "shops", shopId, "templates", id);
+  let data;
+  if (typeof dataOrText === "string") {
+    data = { text: dataOrText || "", stages: Array.isArray(stagesOpt) && stagesOpt.length ? stagesOpt : ["*"] };
+  } else {
+    data = {
+      text: dataOrText?.text || "",
+      stages: Array.isArray(dataOrText?.stages) && dataOrText.stages.length ? dataOrText.stages : ["*"],
+    };
+  }
+  await setDoc(ref, { ...data, updatedAt: new Date() }, { merge: true });
 }
 
-export async function updateTemplate(shopId, stage, data) {
-  const ref = doc(db, "shops", shopId, "templates", stage);
-  await updateDoc(ref, { ...data, updatedAt: new Date() });
+export async function updateTemplate(shopId, id, data) {
+  const ref = doc(db, "shops", shopId, "templates", id);
+  await updateDoc(ref, { ...(data || {}), updatedAt: new Date() });
 }
 
 // Lista todas as lojas (id = doc.id)

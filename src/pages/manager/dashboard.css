@@ -1,0 +1,240 @@
+/* Escopo apenas do dashboard do manager */
+.manager-dashboard {
+  --bg: #0b1220;
+  --surface: #0f172a;
+  --surface-2: #111827;
+  --border: rgba(255,255,255,0.08);
+  --muted: #94a3b8;
+  --text: #e5e7eb;
+  --title: #f8fafc;
+  --brand: #6366F1;
+  --brand-2: #22C55E;
+  --brand-3: #F59E0B;
+  --brand-4: #EF4444;
+  --shadow: 0 10px 24px rgba(0,0,0,0.35);
+
+  color: var(--text);
+  background: radial-gradient(1200px 800px at 10% 0%, rgba(99,102,241,0.12), transparent 60%),
+              radial-gradient(1000px 700px at 90% 10%, rgba(34,197,94,0.10), transparent 55%),
+              var(--bg);
+  padding: 16px;
+  border-radius: 16px;
+}
+
+/* Topbar */
+.manager-dashboard .topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.manager-dashboard .title-group h2 {
+  margin: 0;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--title);
+  letter-spacing: 0.2px;
+}
+
+.manager-dashboard .title-group .subtitle {
+  margin: 4px 0 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Filtros */
+.manager-dashboard .filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.manager-dashboard .filters-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.manager-dashboard .input {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  outline: none;
+}
+
+.manager-dashboard .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.04));
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 13px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform .06s ease, background .2s ease, border-color .2s ease;
+}
+.manager-dashboard .btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255,255,255,0.14);
+}
+.manager-dashboard .btn-ghost {
+  background: transparent;
+}
+
+/* Cards e seções */
+.manager-dashboard .card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(6px);
+}
+
+.manager-dashboard .section {
+  padding: 16px;
+}
+
+.manager-dashboard .section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.manager-dashboard .section-title {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  font-size: 15px;
+  color: var(--title);
+}
+
+.manager-dashboard .section-right,
+.manager-dashboard .legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Stat cards */
+.manager-dashboard .stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.manager-dashboard .stat-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, rgba(99,102,241,0.18), rgba(34,197,94,0.12));
+  color: #c7d2fe;
+  border: 1px solid var(--border);
+}
+
+.manager-dashboard .stat-content {
+  flex: 1;
+}
+
+.manager-dashboard .stat-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.manager-dashboard .stat-value {
+  font-size: 22px;
+  line-height: 1.15;
+  font-weight: 700;
+}
+.manager-dashboard .stat-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* Grids responsivos (sem depender de Tailwind) */
+.manager-dashboard .grid-cards {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.manager-dashboard .grid-4 { grid-template-columns: 1fr; }
+.manager-dashboard .grid-2 { grid-template-columns: 1fr; }
+
+@media (min-width: 720px) {
+  .manager-dashboard .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .manager-dashboard .grid-2 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 1080px) {
+  .manager-dashboard .grid-4 { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* Textos auxiliares */
+.manager-dashboard .muted { color: var(--muted); font-size: 13px; }
+.manager-dashboard .hint { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.manager-dashboard .icon-muted { color: var(--muted); }
+
+/* Área dos gráficos */
+.manager-dashboard .chart {
+  width: 100%;
+  height: 260px;
+}
+
+/* Tabela */
+.manager-dashboard .table-wrap {
+  width: 100%;
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+}
+
+.manager-dashboard .table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.manager-dashboard .table thead tr {
+  background: linear-gradient(180deg, rgba(99,102,241,0.12), rgba(99,102,241,0.06));
+}
+.manager-dashboard .table th,
+.manager-dashboard .table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.manager-dashboard .table tbody tr:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+/* Badge de etapa */
+.manager-dashboard .badge {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0b1220;
+  background: linear-gradient(135deg, #A7F3D0, #93C5FD);
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+/* Loader simples */
+.manager-dashboard .loading {
+  color: var(--muted);
+  font-size: 14px;
+}
