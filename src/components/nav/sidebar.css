@@ -1,0 +1,150 @@
+/* ===== Sidebar moderna (ao barulho) ===== */
+.app-sidebar{
+  /* Tamanho e layout */
+  --sb-width: 240px;
+
+  /* Tokens com base no seu variables.css (Opção A) */
+  --sb-bg: #fff;
+  --sb-fg: var(--color-fg, #111);
+  --sb-muted: var(--color-muted, #6b7280);
+  --sb-border: var(--color-border, #e5e7eb);
+
+  /* Brand */
+  --sb-primary: var(--brand-brown-700);       /* marrom principal */
+  --sb-primary-contrast: #ffffff;
+  --sb-hover: rgba(92,61,46,.08);             /* marrom translúcido */
+  --sb-accent: var(--brand-yellow-500);       /* amarelo destaque */
+
+  width: var(--sb-width);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+
+  background: var(--sb-bg);
+  border-right: 1px solid var(--sb-border);
+  color: var(--sb-fg);
+  box-shadow: inset -1px 0 0 rgba(0,0,0,.03);
+}
+
+/* topo (brand) com leve hint do marrom */
+.app-sidebar .brand{
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(92,61,46,.15);
+}
+
+/* navegação */
+.app-sidebar .nav{
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: auto;
+  max-height: calc(100vh - 56px - 84px); /* vh - brand - footer aprox */
+}
+
+/* link base */
+.app-sidebar .sb-link{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  text-decoration: none;
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease, transform .08s ease;
+}
+.app-sidebar .sb-link:hover{
+  background: var(--sb-hover);
+}
+
+/* estado ativo – pílula marrom + barra amarela */
+.app-sidebar .sb-link.is-active{
+  background: var(--sb-primary);
+  color: var(--sb-primary-contrast);
+  box-shadow: 0 8px 22px rgba(0,0,0,.10), inset 0 0 0 1px rgba(255,255,255,.08);
+  transform: translateY(-1px);
+  position: relative;
+}
+.app-sidebar .sb-link.is-active::before{
+  content: "";
+  position: absolute;
+  left: 6px; top: 8px; bottom: 8px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--sb-accent);
+}
+
+/* foco acessível */
+.app-sidebar .sb-link:focus-visible{
+  outline: 3px solid color-mix(in srgb, var(--sb-accent) 32%, transparent);
+  outline-offset: 2px;
+}
+
+/* tipografia/ícone */
+.app-sidebar .sb-text{ font-size: 14px; }
+.app-sidebar .sb-link svg{
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+  opacity: .85;
+}
+.app-sidebar .sb-link.is-active svg{
+  opacity: 1;
+  color: var(--sb-primary-contrast);
+}
+
+/* rodapé */
+.app-sidebar .sidebar-footer{
+  margin-top: auto;
+  padding: 12px;
+  border-top: 1px solid var(--sb-border);
+  color: var(--sb-muted);
+  display: grid;
+  gap: 8px;
+  background: #fff;
+}
+.app-sidebar .role-line{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.app-sidebar .role-badge{
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(92,61,46,.18);
+  background: var(--brand-yellow-100);
+  color: var(--brand-brown-700);
+}
+.app-sidebar .logout{
+  width: fit-content;
+  color: var(--sb-fg);
+  text-decoration: none;
+  border-radius: 8px;
+  padding: 4px 6px;
+}
+.app-sidebar .logout:hover{ background: var(--sb-hover); }
+
+/* scrollbar suave */
+.app-sidebar .nav::-webkit-scrollbar{ width: 10px; }
+.app-sidebar .nav::-webkit-scrollbar-thumb{
+  background: #d7dde7;
+  border-radius: 999px;
+  border: 2px solid #eef2f7;
+}
+.app-sidebar .nav::-webkit-scrollbar-track{ background: #f3f5f9; }
+
+/* responsivo */
+@media (max-width: 1024px){
+  .app-sidebar{ width: 220px; }
+}
+@media (max-width: 860px){
+  .app-sidebar{ width: 200px; }
+}

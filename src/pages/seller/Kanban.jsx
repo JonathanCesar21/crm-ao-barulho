@@ -28,7 +28,7 @@ import { CSS } from "@dnd-kit/utilities";
 
 function normStage(s = "") {
   return String(s)
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .toLowerCase().trim();
 }
 function getCampaignLabel(c) {
@@ -68,7 +68,6 @@ function onlyDigits(s) {
 /* ============================= */
 function useStageCanon() {
   return useMemo(() => {
-    // Ex.: { "novo": "Novo", "contatado": "Contatado", ... }
     const normToLabel = {};
     KANBAN_STAGES.forEach((label) => {
       normToLabel[normStage(label)] = label;
@@ -76,8 +75,8 @@ function useStageCanon() {
     const labelToNorm = {};
     Object.entries(normToLabel).forEach(([n, label]) => (labelToNorm[label] = n));
 
-    const canonLabel = (s) => normToLabel[normStage(s)] ?? s; // volta para o Label oficial se existir
-    const canonNorm  = (s) => labelToNorm[canonLabel(s)] ?? normStage(s);
+    const canonLabel = (s) => normToLabel[normStage(s)] ?? s;
+    const canonNorm = (s) => labelToNorm[canonLabel(s)] ?? normStage(s);
 
     return { normToLabel, labelToNorm, canonLabel, canonNorm };
   }, []);
@@ -85,7 +84,6 @@ function useStageCanon() {
 
 /* ============================= */
 /* Badge do vendedor             */
-/* ============================= */
 function SellerBadge({ sellerUid }) {
   if (!sellerUid) {
     return <span className="kbA-chip ml-2 text-[10px]">não atribuído</span>;
@@ -96,52 +94,44 @@ function SellerBadge({ sellerUid }) {
 
 /* ============================= */
 /* TemplatePicker (WhatsApp)     */
-/* ============================= */
-function TemplatePicker({ stage, templates, lead, onPick }) {
-  const items = useMemo(() => {
-    const list = [];
-    const push = (label, text) => text && list.push({ label, text });
-
-    push(stage, templates?.[stage]?.text);
-    push("todas as etapas", templates?.todas?.text || templates?.all?.text);
-
-    Object.keys(templates || {}).forEach((k) => {
-      if (k === stage || k === "todas" || k === "all") return;
-      push(k, templates[k]?.text);
-    });
-
-    return list;
-  }, [templates, stage]);
-
+function TemplatePicker({ items, lead, onPick }) {
+  // items: array [{ id, text, scope, campaign }]
   const preview = useCallback(
     (t) => {
       const nome = getLeadDisplayName(lead);
       const telefone = getLeadPhone(lead);
       const cidade = getLeadCity(lead);
-      return t
+      const primeiroNome = (nome || "").split(/\s+/)[0] || "";
+      return String(t || "")
         .replace(/\{\{nome\}\}/gi, nome)
+        .replace(/\{\{primeironome\}\}/gi, primeiroNome)
         .replace(/\{\{telefone\}\}/gi, telefone)
         .replace(/\{\{cidade\}\}/gi, cidade);
     },
     [lead]
   );
 
-  if (items.length === 0) {
-    return <div className="text-[12px] text-neutral-500">Sem templates para esta etapa.</div>;
+  if (!items || items.length === 0) {
+    return <div className="text-[12px] text-neutral-500">Sem templates para esta etapa/campanha.</div>;
   }
+
+  const label = (it) =>
+    it.scope === "campaign" ? `Campanha: ${it.campaign || "—"}`
+      : it.scope === "store" ? "Loja"
+        : "Global";
 
   return (
     <div className="flex flex-col gap-2">
-      {items.map((it, idx) => (
+      {items.map((it) => (
         <button
-          key={idx}
+          key={it.id}
           type="button"
           className="kbA-card"
           style={{ textAlign: "left" }}
           onClick={() => onPick(preview(it.text))}
-          title={`Inserir template: ${it.label}`}
+          title={`Inserir template (${label(it)})`}
         >
-          <div className="text-[12px] text-neutral-500 mb-1">• {it.label}</div>
+          <div className="text-[12px] text-neutral-500 mb-1">• {label(it)}</div>
           <div className="text-[13px]" style={{ whiteSpace: "pre-wrap" }}>
             {preview(it.text)}
           </div>
@@ -151,18 +141,23 @@ function TemplatePicker({ stage, templates, lead, onPick }) {
   );
 }
 
+
 /* ============================= */
 /* Portal simples                 */
-/* ============================= */
 function ModalPortal({ children }) {
   const elRef = useRef(null);
   if (!elRef.current) elRef.current = document.createElement("div");
 
   useEffect(() => {
     const el = elRef.current;
-    document.body.appendChild(el);
+    // 🔑 tenta achar o escopo da página para herdar as CSS vars
+    const host =
+      document.querySelector(".kbA-page") // herda --primary, --success, etc.
+      || document.body;                    // fallback
+
+    host.appendChild(el);
     return () => {
-      document.body.removeChild(el);
+      host.removeChild(el);
     };
   }, []);
 
@@ -171,13 +166,19 @@ function ModalPortal({ children }) {
 
 /* ============================= */
 /* Modal com seletor de estágio  */
-/* ============================= */
-function LeadModal({ open, onClose, lead, stage, templates, onChangeStage }) {
+function LeadModal({ open, onClose, lead, stage, getTemplatesFor, onChangeStage }) {
   const [tab, setTab] = useState("dados"); // "dados" | "whats"
   const [msg, setMsg] = useState("");
   const selectRef = useRef(null);
+  const campaignName =
+    lead?.campanha || lead?.campaign || ""; // pegue do lead (ou do filtro ativo, se preferir)
 
-  // ESC para fechar e travar scroll do body enquanto o modal está aberto
+  const filteredTemplates = useMemo(() => {
+    return getTemplatesFor
+      ? getTemplatesFor({ stage, campaign: campaignName, storeId: lead?.storeId || lead?.lojaId })
+      : [];
+  }, [getTemplatesFor, stage, campaignName, lead?.storeId, lead?.lojaId]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => e.key === "Escape" && onClose?.();
@@ -211,20 +212,25 @@ function LeadModal({ open, onClose, lead, stage, templates, onChangeStage }) {
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="px-4 py-3 border-b flex items-center justify-between" style={{ background: "#f8fafc" }}>
-            <div className="font-semibold">
-              {getLeadDisplayName(lead)} <span className="text-neutral-500">• {stage}</span>
+          <div className="kbA-modalHeader">
+            <div className="kbA-modalTitle">
+              <div className="kbA-modalAvatar">{getInitials(getLeadDisplayName(lead))}</div>
+              <div className="kbA-modalTitleText">
+                <div className="kbA-modalName">{getLeadDisplayName(lead)}</div>
+                <div className="kbA-modalStage">
+                  Etapa atual: <b>{stage}</b>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
+
+            <div className="kbA-modalActions">
               <select
                 ref={selectRef}
-                className="kbA-select"
-                value={stage} // controlado pelo pai
+                className="kbA-select kbA-select--tight"
+                value={stage}
                 onChange={(e) => {
                   const toStage = String(e.target.value || "").trim();
-                  if (toStage && toStage !== stage) {
-                    onChangeStage?.(toStage);  // ⚡ troca imediata
-                  }
+                  if (toStage && toStage !== stage) onChangeStage?.(toStage);
                 }}
                 title="Alterar estágio"
               >
@@ -232,88 +238,100 @@ function LeadModal({ open, onClose, lead, stage, templates, onChangeStage }) {
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
+
               <button
-                className="kbA-chip"
+                className="kbA-btn kbA-btn--success"
                 disabled={!proximo}
                 onClick={() => proximo && onChangeStage?.(proximo)}
                 title="Avançar para a próxima etapa"
               >
-                {proximo ? `Avançar → ${proximo}` : "Última etapa"}
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M13 5l7 7-7 7M5 19V5" fill="none" stroke="currentColor" strokeWidth="2" />
+                </svg>
+                {proximo ? `Avançar` : "Última etapa"}
               </button>
-              <button className="kbA-chip" onClick={onClose}>Fechar</button>
+
+              <button className="kbA-btn kbA-btn--neutral" onClick={onClose}>
+                Fechar
+              </button>
             </div>
           </div>
 
-          {/* Body */}
-          <div className="px-4 pt-3">
-            <div className="flex gap-2 mb-3">
-              <button
-                className={`kbA-chip ${tab === "dados" ? "bg-[var(--primary-weak)] text-[var(--primary)]" : ""}`}
-                onClick={() => setTab("dados")}
-              >
-                Dados
-              </button>
-              <button
-                className={`kbA-chip ${tab === "whats" ? "bg-[var(--primary-weak)] text-[var(--primary)]" : ""}`}
-                onClick={() => setTab("whats")}
-              >
-                WhatsApp
-              </button>
-            </div>
+          {/* Tabs */}
+          <div className="kbA-tabs">
+            <button
+              className={`kbA-tab ${tab === "dados" ? "is-active" : ""}`}
+              onClick={() => setTab("dados")}
+            >
+              Dados
+            </button>
+            <button
+              className={`kbA-tab ${tab === "whats" ? "is-active" : ""}`}
+              onClick={() => setTab("whats")}
+            >
+              WhatsApp
+            </button>
+          </div>
 
+          {/* Body */}
+          <div className="kbA-modalBody">
             {tab === "dados" && (
-              <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="kbA-detailsGrid">
                 <div>
-                  <div className="text-[12px] text-neutral-500">Nome</div>
-                  <div className="font-medium">{getLeadDisplayName(lead)}</div>
+                  <div className="kbA-fieldLabel">Nome</div>
+                  <div className="kbA-fieldValue">{getLeadDisplayName(lead)}</div>
                 </div>
                 <div>
-                  <div className="text-[12px] text-neutral-500">Telefone</div>
-                  <div className="font-medium">{getLeadPhone(lead) || "—"}</div>
+                  <div className="kbA-fieldLabel">Telefone</div>
+                  <div className="kbA-fieldValue">{getLeadPhone(lead) || "—"}</div>
                 </div>
                 <div>
-                  <div className="text-[12px] text-neutral-500">Cidade</div>
-                  <div className="font-medium">{getLeadCity(lead)}</div>
+                  <div className="kbA-fieldLabel">Cidade</div>
+                  <div className="kbA-fieldValue">{getLeadCity(lead)}</div>
                 </div>
                 <div>
-                  <div className="text-[12px] text-neutral-500">Campanha</div>
-                  <div className="font-medium">{lead?.campanha || lead?.campaign || "—"}</div>
+                  <div className="kbA-fieldLabel">Campanha</div>
+                  <div className="kbA-fieldValue">{lead?.campanha || lead?.campaign || "—"}</div>
                 </div>
               </div>
             )}
 
             {tab === "whats" && (
-              <div className="grid grid-cols-5 gap-4">
-                <div className="col-span-2">
-                  <div className="text-[12px] text-neutral-500 mb-2">Templates disponíveis</div>
+              <div className="kbA-whatsGrid">
+                <div className="kbA-whatsTemplates">
+                  <div className="kbA-sectionTitle">Templates disponíveis</div>
                   <TemplatePicker
-                    stage={stage}
-                    templates={templates}
+                    items={filteredTemplates}
                     lead={lead}
                     onPick={(texto) => setMsg(texto)}
                   />
                 </div>
-                <div className="col-span-3">
-                  <div className="text-[12px] text-neutral-500 mb-2">
-                    Mensagem (pré-visualização / editar)
-                  </div>
+                <div className="kbA-whatsComposer">
+                  <div className="kbA-sectionTitle">Mensagem</div>
                   <textarea
-                    className="w-full border rounded-lg p-2"
+                    className="kbA-textarea"
                     rows={10}
                     value={msg}
                     onChange={(e) => setMsg(e.target.value)}
                     placeholder="Selecione um template à esquerda ou escreva sua mensagem…"
                   />
-                  <div className="mt-2 flex gap-2 flex-wrap">
+                  <div className="kbA-actionsRow">
                     <a
-                      className="kbA-chip"
+                      className="kbA-btn kbA-btn--whatsapp"
                       href={`https://wa.me/${phoneDigits}?text=${encodeURIComponent(msg)}`}
                       target="_blank"
                       rel="noreferrer"
                     >
+                      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M20.52 3.48A11.93 11.93 0 0012.06 0 11.94 11.94 0 000 11.94a11.8 11.8 0 001.64 6.03L0 24l6.21-1.63a11.94 11.94 0 005.85 1.54h.01c6.59 0 11.94-5.35 11.94-11.93a11.9 11.9 0 00-3.49-8.5zM12.07 21.2h-.01a9.29 9.29 0 01-4.74-1.29l-.34-.2-3.69.97.99-3.6-.22-.37a9.33 9.33 0 01-1.43-4.97 9.37 9.37 0 019.39-9.38 9.37 9.37 0 019.38 9.38c0 5.18-4.22 9.36-9.33 9.36zm5.34-6.98c-.29-.15-1.7-.84-1.96-.93-.26-.1-.45-.15-.64.15-.19.29-.74.92-.91 1.11-.17.19-.34.22-.63.07-.29-.15-1.23-.45-2.34-1.44-.86-.76-1.44-1.7-1.61-1.99-.17-.29-.02-.45.13-.6.13-.13.29-.34.43-.52.15-.19.19-.33.29-.55.1-.22.05-.41-.02-.56-.07-.15-.64-1.54-.88-2.11-.23-.56-.47-.49-.64-.5h-.55c-.19 0-.56.08-.85.41-.29.34-1.12 1.1-1.12 2.7 0 1.6 1.15 3.14 1.31 3.35.15.19 2.26 3.45 5.48 4.83.76.33 1.35.52 1.81.67.76.24 1.45.21 2 .13.61-.09 1.7-.69 1.94-1.36.24-.67.24-1.24.17-1.36-.07-.11-.26-.18-.55-.33z" fill="currentColor" />
+                      </svg>
                       Abrir no WhatsApp
                     </a>
-                    <button className="kbA-chip" onClick={() => navigator.clipboard.writeText(msg)}>
+
+                    <button
+                      className="kbA-btn kbA-btn--primary"
+                      onClick={() => navigator.clipboard.writeText(msg)}
+                    >
                       Copiar mensagem
                     </button>
                   </div>
@@ -322,7 +340,8 @@ function LeadModal({ open, onClose, lead, stage, templates, onChangeStage }) {
             )}
           </div>
 
-          <div className="px-4 py-3 border-t bg-white rounded-b-xl"></div>
+          {/* Footer (espaço opcional para futuras ações) */}
+          <div className="kbA-modalFooter" />
         </div>
       </div>
     </ModalPortal>
@@ -330,8 +349,7 @@ function LeadModal({ open, onClose, lead, stage, templates, onChangeStage }) {
 }
 
 /* ============================= */
-/* LeadCard (conteúdo do card)   */
-/* ============================= */
+/* LeadCard, Sortable, Column, Board — permanecem iguais */
 function LeadCard({ lead }) {
   const name = getLeadDisplayName(lead);
   const city = getLeadCity(lead);
@@ -369,18 +387,10 @@ function LeadCard({ lead }) {
   );
 }
 
-/* ============================= */
-/* Sortable: drag só no handle   */
-/* ============================= */
 function SortableLeadCard({ lead, stage, onOpen }) {
   const id = lead.id || lead.uid;
   const { attributes, listeners, setNodeRef } = useSortable({ id });
-
-  const style = {
-    transform: CSS.Transform.toString(undefined),
-    transition: undefined,
-    cursor: "pointer",
-  };
+  const style = { transform: CSS.Transform.toString(undefined), transition: undefined, cursor: "pointer" };
 
   return (
     <div
@@ -409,9 +419,6 @@ function SortableLeadCard({ lead, stage, onOpen }) {
   );
 }
 
-/* ============================= */
-/* Kanban Column  (DROPPABLE)    */
-/* ============================= */
 function Column({ stage, leads, onOpenLead }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage });
 
@@ -445,26 +452,18 @@ function Column({ stage, leads, onOpenLead }) {
   );
 }
 
-/* ============================= */
-/* Board completo (com DnD)      */
-/* ============================= */
 function Board({ itemsByStage, onMove, onOpenLead }) {
   const { canonLabel, canonNorm } = useStageCanon();
-
-  // Garanta que só renderizamos colunas canônicas na mesma ordem do KANBAN_STAGES
   const stages = KANBAN_STAGES;
 
-  // Remapeia qualquer chave "estranha" para o rótulo canônico
   const itemsCanon = useMemo(() => {
     const acc = {};
     stages.forEach((label) => (acc[label] = []));
-
     Object.entries(itemsByStage || {}).forEach(([stageKey, arr]) => {
-      const label = canonLabel(stageKey); // volta para o label oficial
+      const label = canonLabel(stageKey);
       if (!acc[label]) acc[label] = [];
       acc[label].push(...(arr || []));
     });
-
     return acc;
   }, [itemsByStage, stages, canonLabel]);
 
@@ -501,12 +500,11 @@ function Board({ itemsByStage, onMove, onOpenLead }) {
 
     const activeId = active.id;
     const fromLabel = findStageOfId(activeId);
-    let toLabel = findStageOfId(over.id) || over.id; // pode ser droppable da coluna
+    let toLabel = findStageOfId(over.id) || over.id;
 
     if (!fromLabel || !toLabel) return;
     if (fromLabel === toLabel) return;
 
-    // Chama o onMove com rótulo e com normalizado (compatibilidade)
     const fromNorm = canonNorm(fromLabel);
     const toNorm = canonNorm(toLabel);
 
@@ -558,8 +556,7 @@ function Board({ itemsByStage, onMove, onOpenLead }) {
 }
 
 /* ============================= */
-/* PÁGINA KANBAN (único arquivo) */
-/* ============================= */
+/* Página */
 export default function Kanban() {
   const {
     loading,
@@ -573,7 +570,7 @@ export default function Kanban() {
   } = useKanban();
 
   const { canonLabel, canonNorm } = useStageCanon();
-  const { templates } = useTemplates();
+  const { getTemplatesFor } = useTemplates();
 
   const [modal, setModal] = useState({ open: false, lead: null, stage: "" });
 
@@ -604,18 +601,14 @@ export default function Kanban() {
       });
 
       try {
-        // formato (from, to, id)
         onMove?.(fromLabel, toLabel, id);
         onMove?.(fromNorm, toNorm, id);
-
-        // formato objeto
         onMove?.({ from: fromLabel, to: toLabel, id, lead: modal.lead });
         onMove?.({ from: fromNorm, to: toNorm, id, lead: modal.lead });
       } catch (err) {
         console.error("[KANBAN] onMove throw:", err);
       }
 
-      // atualização otimista do título do modal
       setModal((m) => ({ ...m, stage: toLabel }));
     },
     [modal.lead, modal.stage, onMove, canonLabel, canonNorm]
@@ -678,7 +671,7 @@ export default function Kanban() {
         onClose={closeLead}
         lead={modal.lead}
         stage={canonLabel(modal.stage)}
-        templates={templates}
+        getTemplatesFor={getTemplatesFor}
         onChangeStage={changeStageFromModal}
       />
     </div>

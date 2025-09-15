@@ -1,35 +1,36 @@
+// src/components/Sidebar.jsx
 import { NavLink } from "react-router-dom";
 import { Circle } from "lucide-react";
 import clsx from "clsx";
+import "./sidebar.css"; // << importa o css dedicado
 
 export default function Sidebar({ items = [], role }) {
   return (
-    <aside className="hidden md:flex w-60 shrink-0 border-r min-h-screen flex-col">
-      <div className="h-14 border-b flex items-center px-4">
+    <aside className="app-sidebar">
+      <div className="brand">
         <img src="/src/assets/logo.svg" alt="logo" height={24} />
       </div>
-      <nav className="p-3 space-y-1">
+
+      <nav className="nav">
         {items.map((it) => (
           <NavLink
             key={it.to}
             to={it.to}
             className={({ isActive }) =>
-              clsx(
-                "flex items-center gap-2 px-3 py-2 rounded-lg transition",
-                isActive ? "bg-black text-white" : "hover:bg-black/5"
-              )
+              clsx("sb-link", isActive ? "is-active" : "")
             }
           >
-            <Circle size={12} />
-            <span className="text-sm">{it.label}</span>
+            <Circle aria-hidden size={14} />
+            <span className="sb-text">{it.label}</span>
           </NavLink>
         ))}
       </nav>
-      <div className="mt-auto p-3 text-xs text-neutral-600">
-        <div>Papel: <b>{role || "—"}</b></div>
-        <div className="mt-2">
-          <a className="hover:underline" href="/logout">Sair</a>
+
+      <div className="sidebar-footer">
+        <div className="role-line">
+          Papel: <span className="role-badge">{role || "—"}</span>
         </div>
+        <a className="logout" href="/logout">Sair</a>
       </div>
     </aside>
   );

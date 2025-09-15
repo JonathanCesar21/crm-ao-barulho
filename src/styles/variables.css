@@ -28,3 +28,20 @@
   --text-xl: 20px;
   --text-2xl: 24px;
 }
+
+:root {
+  /* ===== AO BARULHO — Paleta ===== */
+  --brand-brown-700: #5c3d2e;
+  --brand-brown-600: #6b4b3a;
+  --brand-brown-100: #f1e8e2;
+
+  --brand-yellow-600: #e5b000;
+  --brand-yellow-500: #ffc423; /* dourado principal */
+  --brand-yellow-100: #fff7d6;
+
+  /* ===== Mapeia tokens globais p/ o brand ===== */
+  --color-primary: var(--brand-brown-700);
+  --color-primary-contrast: #ffffff;
+  --color-hover: rgba(92, 61, 46, .08); /* marrom com alpha */
+  --color-focus: var(--brand-yellow-500);
+}

@@ -26,6 +26,16 @@
   --c5: #06b6d4;
   /* ciano */
 
+  /* NOVOS tokens para botões e tabs */
+  --success: #10b981;
+  --success-weak: #e6fbf4;
+  --neutral: #64748b;
+  --neutral-weak: #eef2f7;
+  --danger: #ef4444;
+  --danger-weak: #fee2e2;
+  --wa: #25d366;
+  --wa-weak: #e8fff2;
+
   background: var(--bg);
   color: var(--text);
   min-height: 100dvh;
@@ -189,16 +199,13 @@
   background: #f3f5f9;
 }
 
-/* ===== Board (scroll horizontal em colunas) ===== */
+/* ===== Board ===== */
 .kbA-board {
   display: grid;
   grid-auto-flow: column;
-  /* <<< colunas lado-a-lado */
   grid-auto-columns: minmax(320px, 1fr);
-  /* <<< largura mínima por coluna */
   gap: 14px;
   padding-bottom: 2px;
-  /* evita cortar sombra do último card */
 }
 
 /* ===== Coluna ===== */
@@ -211,10 +218,8 @@
   box-shadow: var(--shadow-sm);
   min-height: 260px;
   scroll-snap-align: start;
-  /* snap por coluna (opcional) */
 }
 
-/* Cabeçalho da coluna */
 .kbA-columnHeader {
   display: flex;
   align-items: center;
@@ -250,7 +255,6 @@
   color: #374151;
 }
 
-/* Colorir dot / acento por posição da coluna */
 .kbA-board>.kbA-column:nth-child(6n+1) .kbA-colDot {
   background: var(--c0);
 }
@@ -275,14 +279,12 @@
   background: var(--c5);
 }
 
-/* Conteúdo */
 .kbA-columnContent {
   padding: 10px;
   display: grid;
   gap: 10px;
 }
 
-/* Estado vazio da coluna */
 .kbA-columnContent:empty::after {
   content: "Arraste leads para cá";
   display: grid;
@@ -304,11 +306,8 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  /* impede overflow em grids */
   box-sizing: border-box;
-  /* padding conta na largura */
   overflow: hidden;
-  /* corta qualquer estouro interno */
   border: 1px solid var(--border);
   background: #fff;
   border-radius: 10px;
@@ -316,7 +315,6 @@
   box-shadow: var(--shadow-sm);
   transition: transform .12s ease, box-shadow .12s ease, border-color .2s ease, background .2s ease;
   cursor: grab;
-  /* drag no card todo */
 }
 
 .kbA-card:hover {
@@ -330,7 +328,6 @@
   cursor: grabbing;
 }
 
-/* Chips / Badges */
 .kbA-chip {
   display: inline-flex;
   align-items: center;
@@ -343,7 +340,6 @@
   color: #475569;
 }
 
-/* Estados Drag & Drop */
 .kbA-dragOverlay {
   filter: drop-shadow(0 14px 24px rgba(0, 0, 0, .15));
 }
@@ -365,7 +361,7 @@
   display: inline-block;
 }
 
-/* ===== Modo compacto (opcional) ===== */
+/* ===== Modo compacto ===== */
 .kbA-page.compact {
   --shadow-sm: var(--shadow-xs);
   --shadow-md: var(--shadow-sm);
@@ -384,7 +380,7 @@
   padding: 8px;
 }
 
-/* Linhas internas do card (evita quebrar layout) */
+/* Linhas internas do card */
 .kbA-card__row {
   display: flex;
   align-items: flex-start;
@@ -412,7 +408,6 @@
   white-space: nowrap;
 }
 
-/* avatar fixo para não empurrar conteúdo */
 .kbA-avatar {
   flex: 0 0 auto;
   width: 36px;
@@ -422,13 +417,10 @@
   justify-content: center;
   border-radius: 999px;
   background: #dbeafe;
-  /* azul 100 */
   color: #1d4ed8;
-  /* azul 700 */
   font-weight: 700;
 }
 
-/* container de chips ordenado e “quebra” elegante */
 .kbA-card__meta {
   display: flex;
   flex-wrap: wrap;
@@ -455,11 +447,8 @@
   .kbA-board {
     grid-auto-columns: minmax(280px, 85vw);
   }
-
-  /* coluna ocupa bem a viewport */
 }
 
-/* Handle de arraste no canto superior direito do card */
 .kbA-dragHandle {
   position: absolute;
   top: 8px;
@@ -482,18 +471,16 @@
   position: relative;
 }
 
-/* Realce de droppable opcional */
 .kbA-dropHover {
   outline: 2px dashed var(--primary, #6366f1);
   outline-offset: -6px;
 }
 
-/* Modal em portal */
+/* ===== Modal base ===== */
 .kbA-modalOverlay {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  /* acima de qualquer board/topbar */
   background: rgba(15, 23, 42, 0.35);
   display: flex;
   align-items: center;
@@ -503,11 +490,265 @@
 
 .kbA-modalPanel {
   width: 100%;
-  max-width: 768px;
-  /* ~max-w-2xl */
+  max-width: 820px;
   background: #fff;
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  border-radius: 14px;
   overflow: hidden;
-  /* para header sticky/bordas ficarem limpas */
+}
+
+/* ===== NOVO: Header do modal ===== */
+.kbA-modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #f8fafc, #f3f6fb);
+}
+
+.kbA-modalTitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.kbA-modalAvatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: #e3f2fd;
+  color: #1e88e5;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+}
+
+.kbA-modalTitleText {
+  display: grid;
+  line-height: 1.15;
+}
+
+.kbA-modalName {
+  font-weight: 700;
+}
+
+.kbA-modalStage {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.kbA-modalActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.kbA-select--tight {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+}
+
+/* ===== NOVO: Tabs (Dados / WhatsApp) ===== */
+.kbA-tabs {
+  display: inline-flex;
+  margin: 12px 12px 0;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+}
+
+.kbA-tab {
+  padding: 8px 14px;
+  font-size: 13px;
+  color: #475569;
+  background: #fff;
+  border: none;
+  cursor: pointer;
+  transition: background .2s, color .2s;
+}
+
+.kbA-tab+.kbA-tab {
+  border-left: 1px solid var(--border);
+}
+
+.kbA-tab.is-active {
+  background: var(--primary-weak);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* ===== NOVO: Body/Grids ===== */
+.kbA-modalBody {
+  padding: 14px 16px 18px;
+}
+
+.kbA-detailsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.kbA-fieldLabel {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.kbA-fieldValue {
+  background: #fcfdff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-weight: 600;
+}
+
+/* WhatsApp area */
+.kbA-whatsGrid {
+  display: grid;
+  grid-template-columns: 1.4fr 2fr;
+  gap: 16px;
+}
+
+.kbA-whatsTemplates .kbA-card {
+  padding: 10px;
+}
+
+.kbA-sectionTitle {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.kbA-textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  resize: vertical;
+  min-height: 180px;
+  outline: none;
+  transition: box-shadow .2s, border-color .2s;
+  box-shadow: var(--shadow-xs) inset;
+}
+
+.kbA-textarea:focus {
+  border-color: var(--primary);
+  box-shadow: var(--focus);
+}
+
+.kbA-actionsRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+/* ===== NOVO: Footer do modal ===== */
+.kbA-modalFooter {
+  border-top: 1px solid var(--border);
+  background: #fff;
+  height: 10px;
+}
+
+/* ===== NOVO: Botões utilitários ===== */
+.kbA-btn {
+  --btn-bg: #f8fafc;
+  --btn-border: var(--border);
+  --btn-color: #1f2a37;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--btn-bg);
+  color: var(--btn-color);
+  border: 1px solid var(--btn-border);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform .06s ease, box-shadow .2s, background .2s, border-color .2s, color .2s;
+  box-shadow: var(--shadow-xs);
+}
+
+.kbA-btn:hover {
+  transform: translateY(-1px);
+}
+
+.kbA-btn:active {
+  transform: translateY(0);
+}
+
+.kbA-btn svg {
+  display: block;
+}
+
+.kbA-btn--primary {
+  --btn-bg: #1e88e5;
+  --btn-border: #1e88e5;
+  --btn-color: #fff;
+}
+
+.kbA-btn--success {
+  --btn-bg: var(--success);
+  --btn-border: var(--success);
+  --btn-color: #fff;
+}
+
+.kbA-btn--neutral {
+  --btn-bg: var(--neutral);
+  --btn-border: var(--neutral);
+  --btn-color: #fff;
+}
+
+.kbA-btn--danger {
+  --btn-bg: var(--danger);
+  --btn-border: var(--danger);
+  --btn-color: #fff;
+}
+
+.kbA-btn--whatsapp {
+  --btn-bg: var(--wa);
+  --btn-border: var(--wa);
+  --btn-color: #fff;
+}
+
+.kbA-btn:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Responsivo das seções do modal */
+@media (max-width: 840px) {
+  .kbA-modalPanel {
+    max-width: 96vw;
+  }
+
+  .kbA-whatsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .kbA-detailsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kbA-modalOverlay {
+  /* Copia os tokens usados no modal, garantindo cores mesmo que o portal caia no <body> */
+  --primary: #1e88e5;
+  --primary-weak: #e3f2fd;
+  --success: #10b981;
+  --success-weak: #e6fbf4;
+  --neutral: #64748b;
+  --neutral-weak: #eef2f7;
+  --danger: #ef4444;
+  --danger-weak: #fee2e2;
+  --wa: #25d366;
+  --wa-weak: #e8fff2;
 }
