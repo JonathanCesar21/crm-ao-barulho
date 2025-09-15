@@ -1,5 +1,6 @@
 // src/pages/seller/Kanban.jsx
-import React, { useMemo, useState, useCallback, useRef } from "react";
+import React, { useMemo, useState, useCallback, useRef, useEffect } from "react";
+import ReactDOM from "react-dom";
 import { KANBAN_STAGES } from "../../constants/kanbanStages";
 import { useKanban } from "../../hooks/useKanban";
 import { useTemplates } from "../../hooks/useTemplates";
@@ -24,7 +25,12 @@ import { CSS } from "@dnd-kit/utilities";
 
 /* ============================= */
 /* Helpers de exibição           */
-/* ============================= */
+
+function normStage(s = "") {
+  return String(s)
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+    .toLowerCase().trim();
+}
 function getCampaignLabel(c) {
   if (typeof c === "string") return c;
   if (c && typeof c === "object") return c.name ?? "";
@@ -55,6 +61,26 @@ function getInitials(name) {
 }
 function onlyDigits(s) {
   return (s || "").toString().replace(/\D/g, "");
+}
+
+/* ============================= */
+/* CANON: estágios e mapeamentos */
+/* ============================= */
+function useStageCanon() {
+  return useMemo(() => {
+    // Ex.: { "novo": "Novo", "contatado": "Contatado", ... }
+    const normToLabel = {};
+    KANBAN_STAGES.forEach((label) => {
+      normToLabel[normStage(label)] = label;
+    });
+    const labelToNorm = {};
+    Object.entries(normToLabel).forEach(([n, label]) => (labelToNorm[label] = n));
+
+    const canonLabel = (s) => normToLabel[normStage(s)] ?? s; // volta para o Label oficial se existir
+    const canonNorm  = (s) => labelToNorm[canonLabel(s)] ?? normStage(s);
+
+    return { normToLabel, labelToNorm, canonLabel, canonNorm };
+  }, []);
 }
 
 /* ============================= */
@@ -126,6 +152,24 @@ function TemplatePicker({ stage, templates, lead, onPick }) {
 }
 
 /* ============================= */
+/* Portal simples                 */
+/* ============================= */
+function ModalPortal({ children }) {
+  const elRef = useRef(null);
+  if (!elRef.current) elRef.current = document.createElement("div");
+
+  useEffect(() => {
+    const el = elRef.current;
+    document.body.appendChild(el);
+    return () => {
+      document.body.removeChild(el);
+    };
+  }, []);
+
+  return ReactDOM.createPortal(children, elRef.current);
+}
+
+/* ============================= */
 /* Modal com seletor de estágio  */
 /* ============================= */
 function LeadModal({ open, onClose, lead, stage, templates, onChangeStage }) {
@@ -133,7 +177,20 @@ function LeadModal({ open, onClose, lead, stage, templates, onChangeStage }) {
   const [msg, setMsg] = useState("");
   const selectRef = useRef(null);
 
-  if (!open) return null;
+  // ESC para fechar e travar scroll do body enquanto o modal está aberto
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => e.key === "Escape" && onClose?.();
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+
+  if (!open || !lead) return null;
 
   const phoneDigits = onlyDigits(getLeadPhone(lead));
   const stages = KANBAN_STAGES;
@@ -141,128 +198,134 @@ function LeadModal({ open, onClose, lead, stage, templates, onChangeStage }) {
   const proximo = idx >= 0 && idx < stages.length - 1 ? stages[idx + 1] : null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      onClick={onClose}
-      style={{ background: "rgba(15,23,42,0.35)" }}
-    >
+    <ModalPortal>
       <div
-        className="w-full max-w-2xl bg-white rounded-xl border"
-        onClick={(e) => e.stopPropagation()}
+        className="kbA-modalOverlay"
+        onClick={onClose}
+        aria-modal="true"
+        role="dialog"
+        aria-label="Detalhes do lead"
       >
-        {/* Header */}
         <div
-          className="px-4 py-3 border-b flex items-center justify-between"
-          style={{ background: "#f8fafc" }}
+          className="kbA-modalPanel"
+          onClick={(e) => e.stopPropagation()}
         >
-          <div className="font-semibold">
-            {getLeadDisplayName(lead)} <span className="text-neutral-500">• {stage}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              ref={selectRef}
-              className="kbA-select"
-              value={stage}
-              onChange={(e) => onChangeStage?.(e.target.value)}
-              title="Alterar estágio"
-            >
-              {stages.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            <button
-              className="kbA-chip"
-              disabled={!proximo}
-              onClick={() => proximo && onChangeStage?.(proximo)}
-              title="Avançar para a próxima etapa"
-            >
-              {proximo ? `Avançar → ${proximo}` : "Última etapa"}
-            </button>
-            <button className="kbA-chip" onClick={onClose}>Fechar</button>
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="px-4 pt-3">
-          <div className="flex gap-2 mb-3">
-            <button
-              className={`kbA-chip ${tab === "dados" ? "bg-[var(--primary-weak)] text-[var(--primary)]" : ""}`}
-              onClick={() => setTab("dados")}
-            >
-              Dados
-            </button>
-            <button
-              className={`kbA-chip ${tab === "whats" ? "bg-[var(--primary-weak)] text-[var(--primary)]" : ""}`}
-              onClick={() => setTab("whats")}
-            >
-              WhatsApp
-            </button>
-          </div>
-
-          {tab === "dados" && (
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div>
-                <div className="text-[12px] text-neutral-500">Nome</div>
-                <div className="font-medium">{getLeadDisplayName(lead)}</div>
-              </div>
-              <div>
-                <div className="text-[12px] text-neutral-500">Telefone</div>
-                <div className="font-medium">{getLeadPhone(lead) || "—"}</div>
-              </div>
-              <div>
-                <div className="text-[12px] text-neutral-500">Cidade</div>
-                <div className="font-medium">{getLeadCity(lead)}</div>
-              </div>
-              <div>
-                <div className="text-[12px] text-neutral-500">Campanha</div>
-                <div className="font-medium">{lead?.campanha || lead?.campaign || "—"}</div>
-              </div>
+          {/* Header */}
+          <div className="px-4 py-3 border-b flex items-center justify-between" style={{ background: "#f8fafc" }}>
+            <div className="font-semibold">
+              {getLeadDisplayName(lead)} <span className="text-neutral-500">• {stage}</span>
             </div>
-          )}
+            <div className="flex items-center gap-2">
+              <select
+                ref={selectRef}
+                className="kbA-select"
+                value={stage} // controlado pelo pai
+                onChange={(e) => {
+                  const toStage = String(e.target.value || "").trim();
+                  if (toStage && toStage !== stage) {
+                    onChangeStage?.(toStage);  // ⚡ troca imediata
+                  }
+                }}
+                title="Alterar estágio"
+              >
+                {KANBAN_STAGES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <button
+                className="kbA-chip"
+                disabled={!proximo}
+                onClick={() => proximo && onChangeStage?.(proximo)}
+                title="Avançar para a próxima etapa"
+              >
+                {proximo ? `Avançar → ${proximo}` : "Última etapa"}
+              </button>
+              <button className="kbA-chip" onClick={onClose}>Fechar</button>
+            </div>
+          </div>
 
-          {tab === "whats" && (
-            <div className="grid grid-cols-5 gap-4">
-              <div className="col-span-2">
-                <div className="text-[12px] text-neutral-500 mb-2">Templates disponíveis</div>
-                <TemplatePicker
-                  stage={stage}
-                  templates={templates}
-                  lead={lead}
-                  onPick={(texto) => setMsg(texto)}
-                />
-              </div>
-              <div className="col-span-3">
-                <div className="text-[12px] text-neutral-500 mb-2">
-                  Mensagem (pré-visualização / editar)
+          {/* Body */}
+          <div className="px-4 pt-3">
+            <div className="flex gap-2 mb-3">
+              <button
+                className={`kbA-chip ${tab === "dados" ? "bg-[var(--primary-weak)] text-[var(--primary)]" : ""}`}
+                onClick={() => setTab("dados")}
+              >
+                Dados
+              </button>
+              <button
+                className={`kbA-chip ${tab === "whats" ? "bg-[var(--primary-weak)] text-[var(--primary)]" : ""}`}
+                onClick={() => setTab("whats")}
+              >
+                WhatsApp
+              </button>
+            </div>
+
+            {tab === "dados" && (
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <div className="text-[12px] text-neutral-500">Nome</div>
+                  <div className="font-medium">{getLeadDisplayName(lead)}</div>
                 </div>
-                <textarea
-                  className="w-full border rounded-lg p-2"
-                  rows={10}
-                  value={msg}
-                  onChange={(e) => setMsg(e.target.value)}
-                  placeholder="Selecione um template à esquerda ou escreva sua mensagem…"
-                />
-                <div className="mt-2 flex gap-2 flex-wrap">
-                  <a
-                    className="kbA-chip"
-                    href={`https://wa.me/${phoneDigits}?text=${encodeURIComponent(msg)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Abrir no WhatsApp
-                  </a>
-                  <button className="kbA-chip" onClick={() => navigator.clipboard.writeText(msg)}>
-                    Copiar mensagem
-                  </button>
+                <div>
+                  <div className="text-[12px] text-neutral-500">Telefone</div>
+                  <div className="font-medium">{getLeadPhone(lead) || "—"}</div>
+                </div>
+                <div>
+                  <div className="text-[12px] text-neutral-500">Cidade</div>
+                  <div className="font-medium">{getLeadCity(lead)}</div>
+                </div>
+                <div>
+                  <div className="text-[12px] text-neutral-500">Campanha</div>
+                  <div className="font-medium">{lead?.campanha || lead?.campaign || "—"}</div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
 
-        <div className="px-4 py-3 border-t bg-white rounded-b-xl"></div>
+            {tab === "whats" && (
+              <div className="grid grid-cols-5 gap-4">
+                <div className="col-span-2">
+                  <div className="text-[12px] text-neutral-500 mb-2">Templates disponíveis</div>
+                  <TemplatePicker
+                    stage={stage}
+                    templates={templates}
+                    lead={lead}
+                    onPick={(texto) => setMsg(texto)}
+                  />
+                </div>
+                <div className="col-span-3">
+                  <div className="text-[12px] text-neutral-500 mb-2">
+                    Mensagem (pré-visualização / editar)
+                  </div>
+                  <textarea
+                    className="w-full border rounded-lg p-2"
+                    rows={10}
+                    value={msg}
+                    onChange={(e) => setMsg(e.target.value)}
+                    placeholder="Selecione um template à esquerda ou escreva sua mensagem…"
+                  />
+                  <div className="mt-2 flex gap-2 flex-wrap">
+                    <a
+                      className="kbA-chip"
+                      href={`https://wa.me/${phoneDigits}?text=${encodeURIComponent(msg)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Abrir no WhatsApp
+                    </a>
+                    <button className="kbA-chip" onClick={() => navigator.clipboard.writeText(msg)}>
+                      Copiar mensagem
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="px-4 py-3 border-t bg-white rounded-b-xl"></div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 
@@ -307,23 +370,16 @@ function LeadCard({ lead }) {
 }
 
 /* ============================= */
-/* Sortable wrapper — drag no card inteiro, click abre modal */
+/* Sortable: drag só no handle   */
 /* ============================= */
 function SortableLeadCard({ lead, stage, onOpen }) {
   const id = lead.id || lead.uid;
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id });
+  const { attributes, listeners, setNodeRef } = useSortable({ id });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.7 : 1,
+    transform: CSS.Transform.toString(undefined),
+    transition: undefined,
+    cursor: "pointer",
   };
 
   return (
@@ -331,10 +387,23 @@ function SortableLeadCard({ lead, stage, onOpen }) {
       ref={setNodeRef}
       style={style}
       className="kbA-card"
-      {...attributes}
-      {...listeners}   // drag (com long-press)
-      onClick={onOpen} // clique simples abre modal
+      onClick={onOpen}
+      onKeyDown={(e) => (e.key === "Enter" ? onOpen() : null)}
+      tabIndex={0}
+      role="button"
+      aria-label="Abrir detalhes do lead"
     >
+      <button
+        className="kbA-dragHandle"
+        {...listeners}
+        {...attributes}
+        onClick={(e) => e.stopPropagation()}
+        title="Arrastar para mover"
+        aria-label="Arrastar cartão"
+      >
+        ⋮⋮
+      </button>
+
       <LeadCard lead={lead} stage={stage} />
     </div>
   );
@@ -380,11 +449,27 @@ function Column({ stage, leads, onOpenLead }) {
 /* Board completo (com DnD)      */
 /* ============================= */
 function Board({ itemsByStage, onMove, onOpenLead }) {
-  const stages = KANBAN_STAGES.filter((s) => s in (itemsByStage || {}));
+  const { canonLabel, canonNorm } = useStageCanon();
 
-  // Clique/toque rápido não ativa drag; drag só com "long-press"
+  // Garanta que só renderizamos colunas canônicas na mesma ordem do KANBAN_STAGES
+  const stages = KANBAN_STAGES;
+
+  // Remapeia qualquer chave "estranha" para o rótulo canônico
+  const itemsCanon = useMemo(() => {
+    const acc = {};
+    stages.forEach((label) => (acc[label] = []));
+
+    Object.entries(itemsByStage || {}).forEach(([stageKey, arr]) => {
+      const label = canonLabel(stageKey); // volta para o label oficial
+      if (!acc[label]) acc[label] = [];
+      acc[label].push(...(arr || []));
+    });
+
+    return acc;
+  }, [itemsByStage, stages, canonLabel]);
+
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { delay: 40, tolerance: 5 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   );
 
   const [activeLead, setActiveLead] = useState(null);
@@ -392,19 +477,19 @@ function Board({ itemsByStage, onMove, onOpenLead }) {
   const findStageOfId = useCallback(
     (id) => {
       for (const st of stages) {
-        const arr = itemsByStage[st] || [];
+        const arr = itemsCanon[st] || [];
         if (arr.some((x) => (x.id || x.uid) === id)) return st;
       }
       return null;
     },
-    [itemsByStage, stages]
+    [itemsCanon, stages]
   );
 
   function handleDragStart(event) {
     const id = event.active.id;
     const fromStage = findStageOfId(id);
     const item =
-      (itemsByStage[fromStage] || []).find((x) => (x.id || x.uid) === id) ||
+      (itemsCanon[fromStage] || []).find((x) => (x.id || x.uid) === id) ||
       null;
     setActiveLead(item);
   }
@@ -415,15 +500,20 @@ function Board({ itemsByStage, onMove, onOpenLead }) {
     if (!over) return;
 
     const activeId = active.id;
-    const fromStage = findStageOfId(activeId);
+    const fromLabel = findStageOfId(activeId);
+    let toLabel = findStageOfId(over.id) || over.id; // pode ser droppable da coluna
 
-    let toStage = findStageOfId(over.id);
-    if (!toStage) toStage = over.id; // drop direto na coluna
+    if (!fromLabel || !toLabel) return;
+    if (fromLabel === toLabel) return;
 
-    if (!fromStage || !toStage) return;
-    if (fromStage === toStage) return;
+    // Chama o onMove com rótulo e com normalizado (compatibilidade)
+    const fromNorm = canonNorm(fromLabel);
+    const toNorm = canonNorm(toLabel);
 
-    onMove?.(fromStage, toStage, activeId);
+    onMove?.(fromLabel, toLabel, activeId);
+    onMove?.(fromNorm, toNorm, activeId);
+    onMove?.({ from: fromLabel, to: toLabel, id: activeId });
+    onMove?.({ from: fromNorm, to: toNorm, id: activeId });
   }
 
   return (
@@ -438,7 +528,7 @@ function Board({ itemsByStage, onMove, onOpenLead }) {
           <Column
             key={stage}
             stage={stage}
-            leads={itemsByStage[stage] || []}
+            leads={itemsCanon[stage] || []}
             onOpenLead={onOpenLead}
           />
         ))}
@@ -477,27 +567,58 @@ export default function Kanban() {
     onMove,
     q,
     setQ,
-    counts,
     campaigns,
     campaign,
     setCampaign,
   } = useKanban();
 
-  const { templates } = useTemplates(); // { [stage]: {text}, todas?: {text} }
+  const { canonLabel, canonNorm } = useStageCanon();
+  const { templates } = useTemplates();
+
   const [modal, setModal] = useState({ open: false, lead: null, stage: "" });
 
-  const openLead = (lead, stage) => setModal({ open: true, lead, stage });
+  const openLead = (lead, stage) =>
+    setModal({ open: true, lead, stage: canonLabel(stage) });
+
   const closeLead = () => setModal({ open: false, lead: null, stage: "" });
 
-  // Troca de etapa pelo modal (usa o mesmo fluxo do DnD)
   const changeStageFromModal = useCallback(
-    async (toStage) => {
+    (toStageRaw) => {
       if (!modal.lead) return;
+
+      const fromLabel = canonLabel(modal.stage);
+      const toLabel = canonLabel(toStageRaw);
+      if (!toLabel || toLabel === fromLabel) return;
+
       const id = modal.lead.id || modal.lead.uid;
-      await onMove(modal.stage, toStage, id);
-      setModal((m) => ({ ...m, stage: toStage })); // reflete no header do modal
+
+      const fromNorm = canonNorm(fromLabel);
+      const toNorm = canonNorm(toLabel);
+
+      console.log("[KANBAN] changeStageFromModal:", {
+        fromStage: fromLabel,
+        toStage: toLabel,
+        fromNorm,
+        toNorm,
+        id,
+      });
+
+      try {
+        // formato (from, to, id)
+        onMove?.(fromLabel, toLabel, id);
+        onMove?.(fromNorm, toNorm, id);
+
+        // formato objeto
+        onMove?.({ from: fromLabel, to: toLabel, id, lead: modal.lead });
+        onMove?.({ from: fromNorm, to: toNorm, id, lead: modal.lead });
+      } catch (err) {
+        console.error("[KANBAN] onMove throw:", err);
+      }
+
+      // atualização otimista do título do modal
+      setModal((m) => ({ ...m, stage: toLabel }));
     },
-    [modal.lead, modal.stage, onMove]
+    [modal.lead, modal.stage, onMove, canonLabel, canonNorm]
   );
 
   if (loading) {
@@ -510,13 +631,9 @@ export default function Kanban() {
 
   return (
     <div className="kbA-page">
-      {/* Topbar */}
       <header className="kbA-topbar">
         <div>
           <h1 className="kbA-title">Kanban de Vendas</h1>
-          <p className="kbA-subtitle">
-            Acompanhe seus leads por etapa e avance oportunidades com eficiência.
-          </p>
         </div>
 
         <div className="kbA-topbar-right">
@@ -552,28 +669,15 @@ export default function Kanban() {
         </div>
       </header>
 
-      {/* Legend */}
-      <section className="kbA-legend" aria-label="Etapas do funil">
-        {KANBAN_STAGES.map((stage, idx) => (
-          <div key={stage} className={`kbA-pill kbA-pill--${idx % 6}`}>
-            <span className="kbA-pill-dot" />
-            <span className="kbA-pill-label">{stage}</span>
-            <span className="kbA-pill-count">{counts?.[stage] ?? 0}</span>
-          </div>
-        ))}
-      </section>
-
-      {/* Board */}
       <main className="kbA-boardWrap">
         <Board itemsByStage={itemsByStage} onMove={onMove} onOpenLead={openLead} />
       </main>
 
-      {/* Modal único (dados + WhatsApp com templates + seletor de etapa) */}
       <LeadModal
         open={modal.open}
         onClose={closeLead}
         lead={modal.lead}
-        stage={modal.stage}
+        stage={canonLabel(modal.stage)}
         templates={templates}
         onChangeStage={changeStageFromModal}
       />

@@ -458,3 +458,56 @@
 
   /* coluna ocupa bem a viewport */
 }
+
+/* Handle de arraste no canto superior direito do card */
+.kbA-dragHandle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  line-height: 1;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 8px;
+  padding: 4px 6px;
+  font-weight: 700;
+  cursor: grab;
+  opacity: 0.7;
+}
+
+.kbA-dragHandle:active {
+  cursor: grabbing;
+}
+
+.kbA-card {
+  position: relative;
+}
+
+/* Realce de droppable opcional */
+.kbA-dropHover {
+  outline: 2px dashed var(--primary, #6366f1);
+  outline-offset: -6px;
+}
+
+/* Modal em portal */
+.kbA-modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  /* acima de qualquer board/topbar */
+  background: rgba(15, 23, 42, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.kbA-modalPanel {
+  width: 100%;
+  max-width: 768px;
+  /* ~max-w-2xl */
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  /* para header sticky/bordas ficarem limpas */
+}
