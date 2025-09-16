@@ -82,6 +82,17 @@ function onlyDigits(s) {
   return (s || "").toString().replace(/\D/g, "");
 }
 
+function toWaNumber(rawPhone) {
+  const d = onlyDigits(rawPhone || "");
+  if (!d) return "";
+  // Se já vier com 55 no começo, mantemos
+  if (d.startsWith("55")) return d;
+  // Se tiver formato brasileiro comum (10 ou 11 dígitos), prefixa 55
+  if (d.length >= 10 && d.length <= 11) return "55" + d;
+  // Caso contrário (outro país ou formato), usa como está
+  return d;
+}
+
 /* ===== isMobile hook (sem libs) ===== */
 function useIsMobile(bp = 768) {
   const [is, setIs] = useState(() =>
@@ -292,7 +303,7 @@ function LeadModal({ open, onClose, lead, stage, getTemplatesFor, onChangeStage 
                   <div className="kbA-actionsRow">
                     <a
                       className="kbA-btn kbA-btn--whatsapp"
-                      href={`https://wa.me/${onlyDigits(getLeadPhone(lead))}?text=${encodeURIComponent(msg)}`}
+                      href={`https://wa.me/${toWaNumber(getLeadPhone(lead))}?text=${encodeURIComponent(msg)}`}
                       target="_blank" rel="noreferrer"
                     >
                       Abrir no WhatsApp
@@ -408,7 +419,7 @@ function MobileLeadScreen({ lead, stage, onClose, onChangeStage, getTemplatesFor
             <div className="kbA-actionsRow">
               <a
                 className="kbA-btn kbA-btn--whatsapp"
-                href={`https://wa.me/${onlyDigits(getLeadPhone(lead))}?text=${encodeURIComponent(msg)}`}
+                href={`https://wa.me/${toWaNumber(getLeadPhone(lead))}?text=${encodeURIComponent(msg)}`}
                 target="_blank" rel="noreferrer"
               >
                 WhatsApp
