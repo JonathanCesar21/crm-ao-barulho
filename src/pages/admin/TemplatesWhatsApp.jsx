@@ -489,7 +489,6 @@ export default function TemplatesWhatsApp() {
                 title="Filtrar por etapa"
               >
                 <option value="">Todas as etapas</option>
-                <option value="*">Qualquer etapa (*)</option>
                 {KANBAN_STAGES.map((s) => (
                   <option key={s} value={s}>{s}</option>
                 ))}

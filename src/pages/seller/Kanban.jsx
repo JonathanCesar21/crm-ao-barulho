@@ -24,17 +24,17 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 /* ============================= */
-/* Helpers de exibição           */
-
+/* Helpers                       */
 function normStage(s = "") {
-  return String(s)
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase().trim();
+  return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }
 function getCampaignLabel(c) {
   if (typeof c === "string") return c;
   if (c && typeof c === "object") return c.name ?? "";
   return "";
+}
+function leadId(lead) {
+  return lead?.id || lead?.uid || null;
 }
 function getLeadDisplayName(lead) {
   return (
@@ -47,11 +47,30 @@ function getLeadDisplayName(lead) {
     "(Sem nome)"
   );
 }
+function getLeadFirstName(lead) {
+  const full = getLeadDisplayName(lead);
+  return (full || "").split(/\s+/)[0] || "";
+}
 function getLeadCity(lead) {
   return lead?.cidade || lead?.city || lead?.endereco?.cidade || "Cidade não informada";
 }
 function getLeadPhone(lead) {
-  return lead?.telefone || lead?.phone || lead?.contact?.phone || "";
+  return lead?.celular || lead?.telefone || lead?.phone || lead?.contact?.phone || "";
+}
+function getLeadCode(lead) {
+  return lead?.codigo || lead?.code || "";
+}
+function getLeadGender(lead) {
+  return lead?.genero || lead?.gender || "";
+}
+function getLeadAge(lead) {
+  const v = lead?.idade ?? lead?.age ?? "";
+  if (v === "" || v === null || typeof v === "undefined") return "";
+  const n = parseInt(v, 10);
+  return Number.isNaN(n) ? "" : n;
+}
+function getLeadLastPurchase(lead) {
+  return lead?.ultimaCompra || lead?.ultimaDataCompra || "";
 }
 function getInitials(name) {
   const s = (name || "").toString().trim();
@@ -63,21 +82,36 @@ function onlyDigits(s) {
   return (s || "").toString().replace(/\D/g, "");
 }
 
+/* ===== isMobile hook (sem libs) ===== */
+function useIsMobile(bp = 768) {
+  const [is, setIs] = useState(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia(`(max-width:${bp}px)`).matches
+      : false
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mql = window.matchMedia(`(max-width:${bp}px)`);
+    const onChange = (e) => setIs(e.matches);
+    try { mql.addEventListener("change", onChange); } catch { mql.onchange = onChange; }
+    return () => {
+      try { mql.removeEventListener("change", onChange); } catch { mql.onchange = null; }
+    };
+  }, [bp]);
+  return is;
+}
+
 /* ============================= */
-/* CANON: estágios e mapeamentos */
-/* ============================= */
+/* CANON: estágios               */
 function useStageCanon() {
   return useMemo(() => {
     const normToLabel = {};
-    KANBAN_STAGES.forEach((label) => {
-      normToLabel[normStage(label)] = label;
-    });
+    KANBAN_STAGES.forEach((label) => { normToLabel[normStage(label)] = label; });
     const labelToNorm = {};
     Object.entries(normToLabel).forEach(([n, label]) => (labelToNorm[label] = n));
 
     const canonLabel = (s) => normToLabel[normStage(s)] ?? s;
     const canonNorm = (s) => labelToNorm[canonLabel(s)] ?? normStage(s);
-
     return { normToLabel, labelToNorm, canonLabel, canonNorm };
   }, []);
 }
@@ -85,9 +119,7 @@ function useStageCanon() {
 /* ============================= */
 /* Badge do vendedor             */
 function SellerBadge({ sellerUid }) {
-  if (!sellerUid) {
-    return <span className="kbA-chip ml-2 text-[10px]">não atribuído</span>;
-  }
+  if (!sellerUid) return <span className="kbA-chip ml-2 text-[10px]">não atribuído</span>;
   const short = String(sellerUid).slice(0, 4).toUpperCase();
   return <span className="kbA-chip ml-2 text-[10px]">{short}</span>;
 }
@@ -95,31 +127,37 @@ function SellerBadge({ sellerUid }) {
 /* ============================= */
 /* TemplatePicker (WhatsApp)     */
 function TemplatePicker({ items, lead, onPick }) {
-  // items: array [{ id, text, scope, campaign }]
   const preview = useCallback(
     (t) => {
       const nome = getLeadDisplayName(lead);
+      const primeiroNome = getLeadFirstName(lead);
       const telefone = getLeadPhone(lead);
       const cidade = getLeadCity(lead);
-      const primeiroNome = (nome || "").split(/\s+/)[0] || "";
+      const codigo = getLeadCode(lead);
+      const genero = getLeadGender(lead);
+      const idade = getLeadAge(lead);
+      const ultima = getLeadLastPurchase(lead);
+      const campanha = lead?.campanha || lead?.campaign || "";
       return String(t || "")
         .replace(/\{\{nome\}\}/gi, nome)
         .replace(/\{\{primeironome\}\}/gi, primeiroNome)
         .replace(/\{\{telefone\}\}/gi, telefone)
-        .replace(/\{\{cidade\}\}/gi, cidade);
+        .replace(/\{\{cidade\}\}/gi, cidade)
+        .replace(/\{\{codigo\}\}/gi, codigo)
+        .replace(/\{\{genero\}\}/gi, genero)
+        .replace(/\{\{idade\}\}/gi, (idade ?? "").toString())
+        .replace(/\{\{ultimacompra\}\}/gi, ultima)
+        .replace(/\{\{ultimadatacompra\}\}/gi, ultima)
+        .replace(/\{\{campanha\}\}/gi, campanha);
     },
     [lead]
   );
-
   if (!items || items.length === 0) {
     return <div className="text-[12px] text-neutral-500">Sem templates para esta etapa/campanha.</div>;
   }
-
   const label = (it) =>
     it.scope === "campaign" ? `Campanha: ${it.campaign || "—"}`
-      : it.scope === "store" ? "Loja"
-        : "Global";
-
+      : it.scope === "store" ? "Loja" : "Global";
   return (
     <div className="flex flex-col gap-2">
       {items.map((it) => (
@@ -141,38 +179,23 @@ function TemplatePicker({ items, lead, onPick }) {
   );
 }
 
-
 /* ============================= */
-/* Portal simples                 */
+/* DESKTOP: Modal (permanece)    */
 function ModalPortal({ children }) {
   const elRef = useRef(null);
   if (!elRef.current) elRef.current = document.createElement("div");
-
   useEffect(() => {
     const el = elRef.current;
-    // 🔑 tenta achar o escopo da página para herdar as CSS vars
-    const host =
-      document.querySelector(".kbA-page") // herda --primary, --success, etc.
-      || document.body;                    // fallback
-
-    host.appendChild(el);
-    return () => {
-      host.removeChild(el);
-    };
+    // joga no body (vamos usar z-index alto no CSS)
+    document.body.appendChild(el);
+    return () => { document.body.removeChild(el); };
   }, []);
-
   return ReactDOM.createPortal(children, elRef.current);
 }
-
-/* ============================= */
-/* Modal com seletor de estágio  */
 function LeadModal({ open, onClose, lead, stage, getTemplatesFor, onChangeStage }) {
-  const [tab, setTab] = useState("dados"); // "dados" | "whats"
+  const [tab, setTab] = useState("dados");
   const [msg, setMsg] = useState("");
-  const selectRef = useRef(null);
-  const campaignName =
-    lead?.campanha || lead?.campaign || ""; // pegue do lead (ou do filtro ativo, se preferir)
-
+  const campaignName = lead?.campanha || lead?.campaign || "";
   const filteredTemplates = useMemo(() => {
     return getTemplatesFor
       ? getTemplatesFor({ stage, campaign: campaignName, storeId: lead?.storeId || lead?.lojaId })
@@ -193,39 +216,25 @@ function LeadModal({ open, onClose, lead, stage, getTemplatesFor, onChangeStage 
 
   if (!open || !lead) return null;
 
-  const phoneDigits = onlyDigits(getLeadPhone(lead));
   const stages = KANBAN_STAGES;
   const idx = stages.indexOf(stage);
   const proximo = idx >= 0 && idx < stages.length - 1 ? stages[idx + 1] : null;
 
   return (
     <ModalPortal>
-      <div
-        className="kbA-modalOverlay"
-        onClick={onClose}
-        aria-modal="true"
-        role="dialog"
-        aria-label="Detalhes do lead"
-      >
-        <div
-          className="kbA-modalPanel"
-          onClick={(e) => e.stopPropagation()}
-        >
+      <div className="kbA-modalOverlay" onClick={onClose} aria-modal="true" role="dialog" aria-label="Detalhes do lead">
+        <div className="kbA-modalPanel" onClick={(e) => e.stopPropagation()}>
           {/* Header */}
           <div className="kbA-modalHeader">
             <div className="kbA-modalTitle">
               <div className="kbA-modalAvatar">{getInitials(getLeadDisplayName(lead))}</div>
               <div className="kbA-modalTitleText">
                 <div className="kbA-modalName">{getLeadDisplayName(lead)}</div>
-                <div className="kbA-modalStage">
-                  Etapa atual: <b>{stage}</b>
-                </div>
+                <div className="kbA-modalStage">Etapa atual: <b>{stage}</b></div>
               </div>
             </div>
-
             <div className="kbA-modalActions">
               <select
-                ref={selectRef}
                 className="kbA-select kbA-select--tight"
                 value={stage}
                 onChange={(e) => {
@@ -234,65 +243,34 @@ function LeadModal({ open, onClose, lead, stage, getTemplatesFor, onChangeStage 
                 }}
                 title="Alterar estágio"
               >
-                {KANBAN_STAGES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
+                {KANBAN_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
-
-              <button
-                className="kbA-btn kbA-btn--success"
-                disabled={!proximo}
-                onClick={() => proximo && onChangeStage?.(proximo)}
-                title="Avançar para a próxima etapa"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M13 5l7 7-7 7M5 19V5" fill="none" stroke="currentColor" strokeWidth="2" />
-                </svg>
-                {proximo ? `Avançar` : "Última etapa"}
+              <button className="kbA-btn kbA-btn--success" disabled={!proximo} onClick={() => proximo && onChangeStage?.(proximo)}>
+                Avançar
               </button>
-
-              <button className="kbA-btn kbA-btn--neutral" onClick={onClose}>
-                Fechar
-              </button>
+              <button className="kbA-btn kbA-btn--neutral" onClick={onClose}>Fechar</button>
             </div>
           </div>
 
           {/* Tabs */}
           <div className="kbA-tabs">
-            <button
-              className={`kbA-tab ${tab === "dados" ? "is-active" : ""}`}
-              onClick={() => setTab("dados")}
-            >
-              Dados
-            </button>
-            <button
-              className={`kbA-tab ${tab === "whats" ? "is-active" : ""}`}
-              onClick={() => setTab("whats")}
-            >
-              WhatsApp
-            </button>
+            <button className={`kbA-tab ${tab === "dados" ? "is-active" : ""}`} onClick={() => setTab("dados")}>Dados</button>
+            <button className={`kbA-tab ${tab === "whats" ? "is-active" : ""}`} onClick={() => setTab("whats")}>WhatsApp</button>
           </div>
 
           {/* Body */}
           <div className="kbA-modalBody">
             {tab === "dados" && (
               <div className="kbA-detailsGrid">
-                <div>
-                  <div className="kbA-fieldLabel">Nome</div>
-                  <div className="kbA-fieldValue">{getLeadDisplayName(lead)}</div>
-                </div>
-                <div>
-                  <div className="kbA-fieldLabel">Telefone</div>
-                  <div className="kbA-fieldValue">{getLeadPhone(lead) || "—"}</div>
-                </div>
-                <div>
-                  <div className="kbA-fieldLabel">Cidade</div>
-                  <div className="kbA-fieldValue">{getLeadCity(lead)}</div>
-                </div>
-                <div>
-                  <div className="kbA-fieldLabel">Campanha</div>
-                  <div className="kbA-fieldValue">{lead?.campanha || lead?.campaign || "—"}</div>
-                </div>
+                <Field label="Código" value={getLeadCode(lead) || "—"} />
+                <Field label="Nome" value={getLeadDisplayName(lead)} />
+                <Field label="Primeiro nome" value={getLeadFirstName(lead) || "—"} />
+                <Field label="Telefone" value={getLeadPhone(lead) || "—"} />
+                <Field label="Gênero" value={getLeadGender(lead) || "—"} />
+                <Field label="Idade" value={getLeadAge(lead) || "—"} />
+                <Field label="Última compra" value={getLeadLastPurchase(lead) || "—"} />
+                <Field label="Cidade" value={getLeadCity(lead)} />
+                <Field label="Campanha" value={lead?.campanha || lead?.campaign || "—"} />
               </div>
             )}
 
@@ -300,11 +278,7 @@ function LeadModal({ open, onClose, lead, stage, getTemplatesFor, onChangeStage 
               <div className="kbA-whatsGrid">
                 <div className="kbA-whatsTemplates">
                   <div className="kbA-sectionTitle">Templates disponíveis</div>
-                  <TemplatePicker
-                    items={filteredTemplates}
-                    lead={lead}
-                    onPick={(texto) => setMsg(texto)}
-                  />
+                  <TemplatePicker items={filteredTemplates} lead={lead} onPick={(texto) => setMsg(texto)} />
                 </div>
                 <div className="kbA-whatsComposer">
                   <div className="kbA-sectionTitle">Mensagem</div>
@@ -318,20 +292,12 @@ function LeadModal({ open, onClose, lead, stage, getTemplatesFor, onChangeStage 
                   <div className="kbA-actionsRow">
                     <a
                       className="kbA-btn kbA-btn--whatsapp"
-                      href={`https://wa.me/${phoneDigits}?text=${encodeURIComponent(msg)}`}
-                      target="_blank"
-                      rel="noreferrer"
+                      href={`https://wa.me/${onlyDigits(getLeadPhone(lead))}?text=${encodeURIComponent(msg)}`}
+                      target="_blank" rel="noreferrer"
                     >
-                      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M20.52 3.48A11.93 11.93 0 0012.06 0 11.94 11.94 0 000 11.94a11.8 11.8 0 001.64 6.03L0 24l6.21-1.63a11.94 11.94 0 005.85 1.54h.01c6.59 0 11.94-5.35 11.94-11.93a11.9 11.9 0 00-3.49-8.5zM12.07 21.2h-.01a9.29 9.29 0 01-4.74-1.29l-.34-.2-3.69.97.99-3.6-.22-.37a9.33 9.33 0 01-1.43-4.97 9.37 9.37 0 019.39-9.38 9.37 9.37 0 019.38 9.38c0 5.18-4.22 9.36-9.33 9.36zm5.34-6.98c-.29-.15-1.7-.84-1.96-.93-.26-.1-.45-.15-.64.15-.19.29-.74.92-.91 1.11-.17.19-.34.22-.63.07-.29-.15-1.23-.45-2.34-1.44-.86-.76-1.44-1.7-1.61-1.99-.17-.29-.02-.45.13-.6.13-.13.29-.34.43-.52.15-.19.19-.33.29-.55.1-.22.05-.41-.02-.56-.07-.15-.64-1.54-.88-2.11-.23-.56-.47-.49-.64-.5h-.55c-.19 0-.56.08-.85.41-.29.34-1.12 1.1-1.12 2.7 0 1.6 1.15 3.14 1.31 3.35.15.19 2.26 3.45 5.48 4.83.76.33 1.35.52 1.81.67.76.24 1.45.21 2 .13.61-.09 1.7-.69 1.94-1.36.24-.67.24-1.24.17-1.36-.07-.11-.26-.18-.55-.33z" fill="currentColor" />
-                      </svg>
                       Abrir no WhatsApp
                     </a>
-
-                    <button
-                      className="kbA-btn kbA-btn--primary"
-                      onClick={() => navigator.clipboard.writeText(msg)}
-                    >
+                    <button className="kbA-btn kbA-btn--primary" onClick={() => navigator.clipboard.writeText(msg)}>
                       Copiar mensagem
                     </button>
                   </div>
@@ -340,27 +306,205 @@ function LeadModal({ open, onClose, lead, stage, getTemplatesFor, onChangeStage 
             )}
           </div>
 
-          {/* Footer (espaço opcional para futuras ações) */}
           <div className="kbA-modalFooter" />
         </div>
       </div>
     </ModalPortal>
   );
 }
+function Field({ label, value }) {
+  return (
+    <div>
+      <div className="kbA-fieldLabel">{label}</div>
+      <div className="kbA-fieldValue">{value}</div>
+    </div>
+  );
+}
 
 /* ============================= */
-/* LeadCard, Sortable, Column, Board — permanecem iguais */
+/* MOBILE: telas full-screen     */
+/* ============================= */
+
+function MobileScreen({ title, onBack, right, children }) {
+  return (
+    <div className="kbM-screen">
+      <div className="kbM-header">
+        <button className="kbA-btn kbA-btn--neutral" onClick={onBack} aria-label="Voltar">←</button>
+        <div className="kbM-title">{title}</div>
+        <div className="kbM-right">{right || null}</div>
+      </div>
+      <div className="kbM-body">{children}</div>
+    </div>
+  );
+}
+
+function MobileLeadScreen({ lead, stage, onClose, onChangeStage, getTemplatesFor }) {
+  const [tab, setTab] = useState("dados");
+  const [msg, setMsg] = useState("");
+  const campaignName = lead?.campanha || lead?.campaign || "";
+  const filteredTemplates = useMemo(() => {
+    return getTemplatesFor
+      ? getTemplatesFor({ stage, campaign: campaignName, storeId: lead?.storeId || lead?.lojaId })
+      : [];
+  }, [getTemplatesFor, stage, campaignName, lead?.storeId, lead?.lojaId]);
+
+  const stages = KANBAN_STAGES;
+  const idx = stages.indexOf(stage);
+  const proximo = idx >= 0 && idx < stages.length - 1 ? stages[idx + 1] : null;
+
+  return (
+    <MobileScreen
+      title={getLeadDisplayName(lead)}
+      onBack={onClose}
+      right={
+        <div className="flex gap-2">
+          <select
+            className="kbA-select kbA-select--tight"
+            value={stage}
+            onChange={(e) => onChangeStage?.(String(e.target.value || "").trim())}
+            title="Alterar estágio"
+          >
+            {KANBAN_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <button className="kbA-btn kbA-btn--success" disabled={!proximo} onClick={() => proximo && onChangeStage?.(proximo)}>
+            Avançar
+          </button>
+        </div>
+      }
+    >
+      <div className="kbM-tabs">
+        <button className={`kbM-tab ${tab === "dados" ? "is-active" : ""}`} onClick={() => setTab("dados")}>Dados</button>
+        <button className={`kbM-tab ${tab === "whats" ? "is-active" : ""}`} onClick={() => setTab("whats")}>WhatsApp</button>
+      </div>
+
+      {tab === "dados" && (
+        <div className="kbA-detailsGrid" style={{ gridTemplateColumns: "1fr" }}>
+          <Field label="Código" value={getLeadCode(lead) || "—"} />
+          <Field label="Primeiro nome" value={getLeadFirstName(lead) || "—"} />
+          <Field label="Telefone" value={getLeadPhone(lead) || "—"} />
+          <Field label="Gênero" value={getLeadGender(lead) || "—"} />
+          <Field label="Idade" value={getLeadAge(lead) || "—"} />
+          <Field label="Última compra" value={getLeadLastPurchase(lead) || "—"} />
+          <Field label="Cidade" value={getLeadCity(lead)} />
+          <Field label="Campanha" value={lead?.campanha || lead?.campaign || "—"} />
+        </div>
+      )}
+
+      {tab === "whats" && (
+        <div className="kbA-whatsGrid" style={{ gridTemplateColumns: "1fr" }}>
+          <div className="kbA-whatsTemplates">
+            <div className="kbA-sectionTitle">Templates disponíveis</div>
+            <TemplatePicker items={filteredTemplates} lead={lead} onPick={(texto) => setMsg(texto)} />
+          </div>
+          <div className="kbA-whatsComposer">
+            <div className="kbA-sectionTitle">Mensagem</div>
+            <textarea
+              className="kbA-textarea"
+              rows={10}
+              value={msg}
+              onChange={(e) => setMsg(e.target.value)}
+              placeholder="Selecione um template à esquerda ou escreva sua mensagem…"
+            />
+            <div className="kbA-actionsRow">
+              <a
+                className="kbA-btn kbA-btn--whatsapp"
+                href={`https://wa.me/${onlyDigits(getLeadPhone(lead))}?text=${encodeURIComponent(msg)}`}
+                target="_blank" rel="noreferrer"
+              >
+                WhatsApp
+              </a>
+              <button className="kbA-btn kbA-btn--primary" onClick={() => navigator.clipboard.writeText(msg)}>
+                Copiar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </MobileScreen>
+  );
+}
+
+function MobileFiltersScreen({
+  q, setQ,
+  campaigns, campaign, setCampaign,
+  phoneFilter, setPhoneFilter,
+  ageMin, setAgeMin,
+  ageMax, setAgeMax,
+  gender, setGender,
+  onClose,
+  onClear,
+}) {
+  return (
+    <MobileScreen
+      title="Filtros"
+      onBack={onClose}
+      right={<button className="kbA-btn kbA-btn--neutral" onClick={onClear}>Limpar</button>}
+    >
+      <div className="kbM-form">
+        <label>Buscar</label>
+        <input className="kbA-input" value={q || ""} onChange={(e) => setQ(e.target.value)} placeholder="Nome, telefone…" />
+
+        <label>Campanha</label>
+        <select className="kbA-select" value={campaign || ""} onChange={(e) => setCampaign(e.target.value)}>
+          {(campaigns?.length ?? 0) === 0 ? (
+            <option value="">(sem campanha)</option>
+          ) : (
+            <>
+              <option value="">Todas as campanhas</option>
+              {campaigns.map((c) => {
+                const label = getCampaignLabel(c);
+                return <option key={label || "sem-nome"} value={label}>{label || "(sem nome)"}</option>;
+              })}
+            </>
+          )}
+        </select>
+
+        <label>Telefone</label>
+        <select className="kbA-select" value={phoneFilter} onChange={(e) => setPhoneFilter(e.target.value)}>
+          <option value="all">Todos</option>
+          <option value="has">Com telefone</option>
+          <option value="no">Sem telefone</option>
+        </select>
+
+        <div className="kbM-row2">
+          <div>
+            <label>Idade mín.</label>
+            <input className="kbA-input" type="number" min="0" value={ageMin} onChange={(e) => setAgeMin(e.target.value)} />
+          </div>
+          <div>
+            <label>Idade máx.</label>
+            <input className="kbA-input" type="number" min="0" value={ageMax} onChange={(e) => setAgeMax(e.target.value)} />
+          </div>
+        </div>
+
+        <label>Gênero</label>
+        <select className="kbA-select" value={gender} onChange={(e) => setGender(e.target.value)}>
+          <option value="all">Todos</option>
+          <option value="M">Masculino</option>
+          <option value="F">Feminino</option>
+        </select>
+
+        <button className="kbA-btn kbA-btn--primary" onClick={onClose}>Aplicar</button>
+      </div>
+    </MobileScreen>
+  );
+}
+
+/* ============================= */
+/* LeadCard / Sortable / Column  */
 function LeadCard({ lead }) {
   const name = getLeadDisplayName(lead);
   const city = getLeadCity(lead);
   const phone = getLeadPhone(lead);
+  const code = getLeadCode(lead);
+  const gender = getLeadGender(lead);
+  const age = getLeadAge(lead);
+  const last = getLeadLastPurchase(lead);
   const initials = getInitials(name);
-
   return (
     <>
       <div className="kbA-card__row">
         <div className="kbA-avatar">{initials}</div>
-
         <div className="kbA-card__main">
           <div className="flex items-center gap-2 min-w-0">
             <div className="kbA-card__title">{name}</div>
@@ -369,29 +513,22 @@ function LeadCard({ lead }) {
           <div className="kbA-card__subtitle">{city}</div>
         </div>
       </div>
-
       <div className="kbA-card__meta">
-        {phone ? (
-          <span className="kbA-chip">📞 {phone}</span>
-        ) : (
-          <span className="kbA-chip opacity-70">📞 sem telefone</span>
-        )}
-        {lead?.campanha || lead?.campaign ? (
-          <span className="kbA-chip">🎯 {lead.campanha || lead.campaign}</span>
-        ) : null}
-        {lead?.valor || lead?.value ? (
-          <span className="kbA-chip">💰 {lead.valor || lead.value}</span>
-        ) : null}
+        {code ? <span className="kbA-chip">🆔 {code}</span> : null}
+        {phone ? <span className="kbA-chip">📞 {phone}</span> : <span className="kbA-chip opacity-70">📞 sem telefone</span>}
+        {gender ? <span className="kbA-chip">⚧ {gender}</span> : null}
+        {age || age === 0 ? <span className="kbA-chip">🎂 {age}</span> : null}
+        {last ? <span className="kbA-chip">🛒 {last}</span> : null}
+        {lead?.campanha || lead?.campaign ? <span className="kbA-chip">🎯 {lead.campanha || lead.campaign}</span> : null}
+        {lead?.valor || lead?.value ? <span className="kbA-chip">💰 {lead.valor || lead.value}</span> : null}
       </div>
     </>
   );
 }
-
 function SortableLeadCard({ lead, stage, onOpen }) {
-  const id = lead.id || lead.uid;
+  const id = leadId(lead);
   const { attributes, listeners, setNodeRef } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(undefined), transition: undefined, cursor: "pointer" };
-
   return (
     <div
       ref={setNodeRef}
@@ -403,25 +540,14 @@ function SortableLeadCard({ lead, stage, onOpen }) {
       role="button"
       aria-label="Abrir detalhes do lead"
     >
-      <button
-        className="kbA-dragHandle"
-        {...listeners}
-        {...attributes}
-        onClick={(e) => e.stopPropagation()}
-        title="Arrastar para mover"
-        aria-label="Arrastar cartão"
-      >
-        ⋮⋮
-      </button>
-
+      <button className="kbA-dragHandle" {...listeners} {...attributes} onClick={(e) => e.stopPropagation()} title="Arrastar para mover" aria-label="Arrastar cartão">⋮⋮</button>
       <LeadCard lead={lead} stage={stage} />
     </div>
   );
 }
-
-function Column({ stage, leads, onOpenLead }) {
+function Column({ stage, leads, visibleCount, onOpenLead, onLoadMore }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage });
-
+  const shown = leads.slice(0, visibleCount);
   return (
     <section className="kbA-column">
       <div className="kbA-columnHeader">
@@ -429,33 +555,22 @@ function Column({ stage, leads, onOpenLead }) {
         <span className="kbA-colTitle">{stage}</span>
         <span className="kbA-colCount">{leads.length}</span>
       </div>
-
-      <div
-        ref={setNodeRef}
-        className={`kbA-columnContent ${isOver ? "kbA-dropHover" : ""}`}
-      >
-        <SortableContext
-          items={leads.map((l) => l.id || l.uid)}
-          strategy={rectSortingStrategy}
-        >
-          {leads.map((lead) => (
-            <SortableLeadCard
-              key={lead.id || lead.uid}
-              lead={lead}
-              stage={stage}
-              onOpen={() => onOpenLead(lead, stage)}
-            />
+      <div ref={setNodeRef} className={`kbA-columnContent ${isOver ? "kbA-dropHover" : ""}`}>
+        <SortableContext items={shown.map((l) => leadId(l)).filter(Boolean)} strategy={rectSortingStrategy}>
+          {shown.map((lead) => (
+            <SortableLeadCard key={leadId(lead)} lead={lead} stage={stage} onOpen={() => onOpenLead(lead, stage)} />
           ))}
         </SortableContext>
+        {visibleCount < leads.length && (
+          <button className="kbA-loadMore" onClick={() => onLoadMore?.(stage)} title="Carregar mais">Carregar mais 10</button>
+        )}
       </div>
     </section>
   );
 }
-
-function Board({ itemsByStage, onMove, onOpenLead }) {
+function Board({ itemsByStage, onMove, onOpenLead, visibleByStage }) {
   const { canonLabel, canonNorm } = useStageCanon();
   const stages = KANBAN_STAGES;
-
   const itemsCanon = useMemo(() => {
     const acc = {};
     stages.forEach((label) => (acc[label] = []));
@@ -467,67 +582,49 @@ function Board({ itemsByStage, onMove, onOpenLead }) {
     return acc;
   }, [itemsByStage, stages, canonLabel]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
-  );
-
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const [activeLead, setActiveLead] = useState(null);
 
-  const findStageOfId = useCallback(
-    (id) => {
-      for (const st of stages) {
-        const arr = itemsCanon[st] || [];
-        if (arr.some((x) => (x.id || x.uid) === id)) return st;
-      }
-      return null;
-    },
-    [itemsCanon, stages]
-  );
+  const findStageOfId = useCallback((id) => {
+    for (const st of stages) {
+      const arr = itemsCanon[st] || [];
+      if (arr.some((x) => leadId(x) === id)) return st;
+    }
+    return null;
+  }, [itemsCanon, stages]);
 
   function handleDragStart(event) {
     const id = event.active.id;
     const fromStage = findStageOfId(id);
-    const item =
-      (itemsCanon[fromStage] || []).find((x) => (x.id || x.uid) === id) ||
-      null;
+    const item = (itemsCanon[fromStage] || []).find((x) => leadId(x) === id) || null;
     setActiveLead(item);
   }
-
   function handleDragEnd(event) {
     const { active, over } = event;
     setActiveLead(null);
     if (!over) return;
-
     const activeId = active.id;
+    if (!activeId) return;
     const fromLabel = findStageOfId(activeId);
     let toLabel = findStageOfId(over.id) || over.id;
-
-    if (!fromLabel || !toLabel) return;
-    if (fromLabel === toLabel) return;
-
+    if (!fromLabel || !toLabel || fromLabel === toLabel) return;
     const fromNorm = canonNorm(fromLabel);
     const toNorm = canonNorm(toLabel);
-
-    onMove?.(fromLabel, toLabel, activeId);
-    onMove?.(fromNorm, toNorm, activeId);
     onMove?.({ from: fromLabel, to: toLabel, id: activeId });
     onMove?.({ from: fromNorm, to: toNorm, id: activeId });
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="kbA-board">
         {stages.map((stage) => (
           <Column
             key={stage}
             stage={stage}
             leads={itemsCanon[stage] || []}
+            visibleCount={visibleByStage?.[stage] ?? 10}
             onOpenLead={onOpenLead}
+            onLoadMore={(st) => visibleByStage?.onLoadMore?.(st)}
           />
         ))}
       </div>
@@ -536,16 +633,10 @@ function Board({ itemsByStage, onMove, onOpenLead }) {
         {activeLead ? (
           <div className="kbA-card kbA-dragOverlay">
             <div className="flex items-start gap-3">
-              <div className="kbA-avatar">
-                {getInitials(getLeadDisplayName(activeLead))}
-              </div>
+              <div className="kbA-avatar">{getInitials(getLeadDisplayName(activeLead))}</div>
               <div className="min-w-0">
-                <div className="font-medium truncate">
-                  {getLeadDisplayName(activeLead)}
-                </div>
-                <div className="text-[12px] text-neutral-500 truncate">
-                  {getLeadCity(activeLead)}
-                </div>
+                <div className="font-medium truncate">{getLeadDisplayName(activeLead)}</div>
+                <div className="text-[12px] text-neutral-500 truncate">{getLeadCity(activeLead)}</div>
               </div>
             </div>
           </div>
@@ -556,62 +647,114 @@ function Board({ itemsByStage, onMove, onOpenLead }) {
 }
 
 /* ============================= */
-/* Página */
+/* Página                        */
 export default function Kanban() {
   const {
     loading,
     itemsByStage,
     onMove,
-    q,
-    setQ,
-    campaigns,
-    campaign,
-    setCampaign,
+    q, setQ,
+    campaigns, campaign, setCampaign,
   } = useKanban();
 
   const { canonLabel, canonNorm } = useStageCanon();
   const { getTemplatesFor } = useTemplates();
 
-  const [modal, setModal] = useState({ open: false, lead: null, stage: "" });
+  const isMobile = useIsMobile(768);
 
-  const openLead = (lead, stage) =>
-    setModal({ open: true, lead, stage: canonLabel(stage) });
+  // ===== Filtros extras =====
+  const [phoneFilter, setPhoneFilter] = useState("all"); // all | has | no
+  const [ageMin, setAgeMin] = useState("");
+  const [ageMax, setAgeMax] = useState("");
+  const [gender, setGender] = useState("all"); // all | M | F
+
+  const passesExtraFilters = useCallback((lead) => {
+    const hasPhone = !!onlyDigits(getLeadPhone(lead));
+    if (phoneFilter === "has" && !hasPhone) return false;
+    if (phoneFilter === "no" && hasPhone) return false;
+
+    const age = getLeadAge(lead);
+    if (age !== "" && !Number.isNaN(Number(age))) {
+      if (ageMin !== "" && Number(age) < Number(ageMin)) return false;
+      if (ageMax !== "" && Number(age) > Number(ageMax)) return false;
+    } else {
+      if (ageMin !== "" || ageMax !== "") return false;
+    }
+
+    if (gender !== "all") {
+      const g = (getLeadGender(lead) || "").toString().trim().toUpperCase();
+      if (!g.startsWith(gender.toUpperCase())) return false;
+    }
+    return true;
+  }, [phoneFilter, ageMin, ageMax, gender]);
+
+  const itemsByStageFiltered = useMemo(() => {
+    const out = {};
+    Object.entries(itemsByStage || {}).forEach(([stage, arr]) => {
+      out[stage] = (arr || []).filter(passesExtraFilters);
+    });
+    return out;
+  }, [itemsByStage, passesExtraFilters]);
+
+  // ===== Paginação por coluna =====
+  const [visibleByStage, setVisibleByStage] = useState(() => {
+    const init = {};
+    KANBAN_STAGES.forEach((s) => (init[s] = 10));
+    // callback para Column
+    init.onLoadMore = (stageLabel) => {
+      setVisibleByStage((prev) => ({ ...prev, [stageLabel]: (prev[stageLabel] || 10) + 10, onLoadMore: prev.onLoadMore }));
+    };
+    return init;
+  });
+  useEffect(() => {
+    const next = {};
+    KANBAN_STAGES.forEach((s) => (next[s] = 10));
+    next.onLoadMore = visibleByStage.onLoadMore;
+    setVisibleByStage(next);
+  }, [campaign, q, phoneFilter, ageMin, ageMax, gender, Object.keys(itemsByStageFiltered).length]); // reset paginação quando filtros mudam
+
+  // ===== Mobile: “navegação” interna =====
+  const [mobileView, setMobileView] = useState("board"); // board | filters | lead
+  const [modal, setModal] = useState({ open: false, lead: null, stage: "" }); // desktop modal
+  const [leadMobile, setLeadMobile] = useState({ lead: null, stage: "" }); // mobile lead
+
+  const openLead = (lead, stage) => {
+    const stageLabel = canonLabel(stage);
+    if (isMobile) {
+      setLeadMobile({ lead, stage: stageLabel });
+      setMobileView("lead");
+    } else {
+      setModal({ open: true, lead, stage: stageLabel });
+    }
+  };
 
   const closeLead = () => setModal({ open: false, lead: null, stage: "" });
 
+  const changeStage = useCallback((toStageRaw, leadObj, currentStageLabel, setStageCb) => {
+    if (!leadObj) return;
+    const fromLabel = canonLabel(currentStageLabel);
+    const toLabel = canonLabel(toStageRaw);
+    if (!toLabel || toLabel === fromLabel) return;
+    const id = leadId(leadObj);
+    if (!id) return;
+    const fromNorm = canonNorm(fromLabel);
+    const toNorm = canonNorm(toLabel);
+    try {
+      onMove?.({ from: fromLabel, to: toLabel, id });
+      onMove?.({ from: fromNorm, to: toNorm, id });
+      setStageCb?.(toLabel);
+    } catch (err) {
+      console.error("[KANBAN] onMove throw:", err);
+    }
+  }, [onMove, canonLabel, canonNorm]);
+
   const changeStageFromModal = useCallback(
-    (toStageRaw) => {
-      if (!modal.lead) return;
-
-      const fromLabel = canonLabel(modal.stage);
-      const toLabel = canonLabel(toStageRaw);
-      if (!toLabel || toLabel === fromLabel) return;
-
-      const id = modal.lead.id || modal.lead.uid;
-
-      const fromNorm = canonNorm(fromLabel);
-      const toNorm = canonNorm(toLabel);
-
-      console.log("[KANBAN] changeStageFromModal:", {
-        fromStage: fromLabel,
-        toStage: toLabel,
-        fromNorm,
-        toNorm,
-        id,
-      });
-
-      try {
-        onMove?.(fromLabel, toLabel, id);
-        onMove?.(fromNorm, toNorm, id);
-        onMove?.({ from: fromLabel, to: toLabel, id, lead: modal.lead });
-        onMove?.({ from: fromNorm, to: toNorm, id, lead: modal.lead });
-      } catch (err) {
-        console.error("[KANBAN] onMove throw:", err);
-      }
-
-      setModal((m) => ({ ...m, stage: toLabel }));
-    },
-    [modal.lead, modal.stage, onMove, canonLabel, canonNorm]
+    (toStageRaw) => changeStage(toStageRaw, modal.lead, modal.stage, (to) => setModal((m) => ({ ...m, stage: to }))),
+    [modal.lead, modal.stage, changeStage]
+  );
+  const changeStageFromMobile = useCallback(
+    (toStageRaw) => changeStage(toStageRaw, leadMobile.lead, leadMobile.stage, (to) => setLeadMobile((m) => ({ ...m, stage: to }))),
+    [leadMobile.lead, leadMobile.stage, changeStage]
   );
 
   if (loading) {
@@ -622,6 +765,10 @@ export default function Kanban() {
     );
   }
 
+  const clearExtraFilters = () => {
+    setPhoneFilter("all"); setAgeMin(""); setAgeMax(""); setGender("all");
+  };
+
   return (
     <div className="kbA-page">
       <header className="kbA-topbar">
@@ -629,51 +776,101 @@ export default function Kanban() {
           <h1 className="kbA-title">Kanban de Vendas</h1>
         </div>
 
-        <div className="kbA-topbar-right">
-          <input
-            className="kbA-input"
-            value={q || ""}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar por nome, telefone…"
-            title="Buscar"
-          />
-          <select
-            className="kbA-select"
-            value={campaign || ""}
-            onChange={(e) => setCampaign(e.target.value)}
-            title="Campanha"
-          >
-            {(campaigns?.length ?? 0) === 0 ? (
-              <option value="">(sem campanha)</option>
-            ) : (
-              <>
-                <option value="">Todas as campanhas</option>
-                {campaigns.map((c) => {
-                  const label = getCampaignLabel(c);
-                  return (
-                    <option key={label || "sem-nome"} value={label}>
-                      {label || "(sem nome)"}
-                    </option>
-                  );
-                })}
-              </>
-            )}
-          </select>
-        </div>
+        {/* Desktop: filtros inline */}
+        {!isMobile && (
+          <div className="kbA-topbar-right kbA-filters kbA-filters--desktop">
+            <input className="kbA-input" value={q || ""} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nome, telefone…" title="Buscar" />
+            <select className="kbA-select" value={campaign || ""} onChange={(e) => setCampaign(e.target.value)} title="Campanha">
+              {(campaigns?.length ?? 0) === 0 ? (
+                <option value="">(sem campanha)</option>
+              ) : (
+                <>
+                  <option value="">Todas as campanhas</option>
+                  {campaigns.map((c) => {
+                    const label = getCampaignLabel(c);
+                    return <option key={label || "sem-nome"} value={label}>{label || "(sem nome)"}</option>;
+                  })}
+                </>
+              )}
+            </select>
+            <select className="kbA-select" value={phoneFilter} onChange={(e) => setPhoneFilter(e.target.value)} title="Telefone">
+              <option value="all">Telefone: todos</option>
+              <option value="has">Com telefone</option>
+              <option value="no">Sem telefone</option>
+            </select>
+            <input className="kbA-input kbA-input--tight" type="number" min="0" placeholder="Idade mín." value={ageMin} onChange={(e) => setAgeMin(e.target.value)} />
+            <input className="kbA-input kbA-input--tight" type="number" min="0" placeholder="Idade máx." value={ageMax} onChange={(e) => setAgeMax(e.target.value)} />
+            <select className="kbA-select" value={gender} onChange={(e) => setGender(e.target.value)} title="Gênero">
+              <option value="all">Gênero: todos</option>
+              <option value="M">Masculino</option>
+              <option value="F">Feminino</option>
+            </select>
+            <button className="kbA-btn kbA-btn--neutral" onClick={clearExtraFilters} title="Limpar filtros">Limpar</button>
+          </div>
+        )}
+
+        {/* Mobile: botão para abrir filtros em tela */}
+        {isMobile && (
+          <div className="kbA-topbar-right">
+            <input
+              className="kbA-input"
+              value={q || ""}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar por nome, telefone…"
+              title="Buscar"
+              style={{ flex: 1 }}
+            />
+            <button className="kbA-btn kbA-btn--neutral" onClick={() => setMobileView("filters")} aria-label="Abrir filtros">
+              ☰ Filtros
+            </button>
+          </div>
+        )}
       </header>
 
       <main className="kbA-boardWrap">
-        <Board itemsByStage={itemsByStage} onMove={onMove} onOpenLead={openLead} />
+        <Board
+          itemsByStage={itemsByStageFiltered}
+          onMove={onMove}
+          onOpenLead={openLead}
+          visibleByStage={visibleByStage}
+        />
       </main>
 
-      <LeadModal
-        open={modal.open}
-        onClose={closeLead}
-        lead={modal.lead}
-        stage={canonLabel(modal.stage)}
-        getTemplatesFor={getTemplatesFor}
-        onChangeStage={changeStageFromModal}
-      />
+      {/* Desktop modal */}
+      {!isMobile && (
+        <LeadModal
+          open={modal.open}
+          onClose={closeLead}
+          lead={modal.lead}
+          stage={canonLabel(modal.stage)}
+          getTemplatesFor={getTemplatesFor}
+          onChangeStage={changeStageFromModal}
+        />
+      )}
+
+      {/* Mobile screens */}
+      {isMobile && mobileView === "filters" && (
+        <MobileFiltersScreen
+          q={q} setQ={setQ}
+          campaigns={campaigns} campaign={campaign} setCampaign={setCampaign}
+          phoneFilter={phoneFilter} setPhoneFilter={setPhoneFilter}
+          ageMin={ageMin} setAgeMin={setAgeMin}
+          ageMax={ageMax} setAgeMax={setAgeMax}
+          gender={gender} setGender={setGender}
+          onClose={() => setMobileView("board")}
+          onClear={clearExtraFilters}
+        />
+      )}
+
+      {isMobile && mobileView === "lead" && leadMobile.lead && (
+        <MobileLeadScreen
+          lead={leadMobile.lead}
+          stage={leadMobile.stage}
+          onClose={() => setMobileView("board")}
+          onChangeStage={changeStageFromMobile}
+          getTemplatesFor={getTemplatesFor}
+        />
+      )}
     </div>
   );
 }

@@ -1,128 +1,152 @@
 // src/hooks/useKanban.js
-import { useEffect, useMemo, useState, useCallback } from "react";
-import { KANBAN_STAGES } from "../constants/kanbanStages";
-import { subscribeLeadsByShop, moveLeadStage } from "../services/leadsService";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import toast from "react-hot-toast";
 import { useRole } from "../contexts/RoleContext";
+import { KANBAN_STAGES } from "../constants/kanbanStages";
+import {
+  subscribeLeadsByShop,
+  moveLeadStage,
+} from "../services/leadsService";
 
-function getMillis(ts) {
-  if (!ts) return 0;
-  if (typeof ts.toMillis === "function") return ts.toMillis();
-  return ts instanceof Date ? ts.getTime() : Number(ts) || 0;
+/* ===== helpers ===== */
+function normStage(s = "") {
+  return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+function useStageCanon() {
+  return useMemo(() => {
+    const normToLabel = {};
+    KANBAN_STAGES.forEach((label) => (normToLabel[normStage(label)] = label));
+    const labelToNorm = {};
+    Object.entries(normToLabel).forEach(([n, label]) => (labelToNorm[label] = n));
+    const canonLabel = (s) => normToLabel[normStage(s)] ?? s;
+    const canonNorm = (s) => labelToNorm[canonLabel(s)] ?? normStage(s);
+    return { canonLabel, canonNorm };
+  }, []);
+}
+function leadId(lead) {
+  return lead?.id || lead?.uid || null;
+}
+function normTxt(s = "") {
+  return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
 export function useKanban() {
-  const { shopId, role, user } = useRole();
-  const [allLeads, setAllLeads] = useState([]);
+  const { shopId } = useRole() || {};
+  const { canonLabel } = useStageCanon();
+
   const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState([]);           // todos os leads
+  const [q, setQ] = useState("");                 // busca
+  const [campaign, setCampaign] = useState("");   // filtro de campanha
+  const [campaigns, setCampaigns] = useState([]); // lista para o select
 
-  const [q, setQ] = useState("");
-  const [campaign, setCampaign] = useState("");
-  const [campaigns, setCampaigns] = useState([]); // [{name, latestMs}]
-
+  // Assina os leads da loja
   useEffect(() => {
     if (!shopId) return;
     setLoading(true);
-    const unsub = subscribeLeadsByShop(shopId, (list) => {
-      setAllLeads(list);
-      setLoading(false);
-    });
+    const unsub = subscribeLeadsByShop(
+      shopId,
+      (list) => {
+        setRows(list || []);
+        setLoading(false);
+      },
+      { orderByField: "createdAt", direction: "desc" }
+    );
     return () => unsub && unsub();
   }, [shopId]);
 
-  // Vendedor: só vê seus leads + não atribuídos
-  const visibleForRole = useMemo(() => {
-    if (role === "seller" && user?.uid) {
-      return allLeads.filter((l) => !l.sellerUid || l.sellerUid === user.uid);
-    }
-    return allLeads;
-  }, [allLeads, role, user]);
-
-  // Campanhas
+  // Deriva lista de campanhas a partir dos leads
   useEffect(() => {
-    const map = new Map();
-    for (const l of visibleForRole) {
-      const name = (l.campaign || "").trim() || "(sem campanha)";
-      const ms = getMillis(l.createdAt);
-      const cur = map.get(name);
-      if (!cur || ms > cur.latestMs) map.set(name, { name, latestMs: ms });
-    }
-    const list = Array.from(map.values()).sort((a, b) => b.latestMs - a.latestMs);
-    setCampaigns(list);
+    const set = new Map();
+    rows.forEach((r) => {
+      const c = (r.campanha || r.campaign || "").trim();
+      if (!c) return;
+      set.set(c, true);
+    });
+    setCampaigns(Array.from(set.keys()).map((name) => ({ id: name, name })));
+  }, [rows]);
 
-    if (!campaign && list.length) setCampaign(list[0].name);
-    if (campaign && list.length && !list.find((c) => c.name === campaign)) {
-      setCampaign(list[0].name);
-    }
-  }, [visibleForRole]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Filtros
+  // Filtro por campanha e busca
   const filtered = useMemo(() => {
-    let arr = visibleForRole;
-
-    if (campaign) {
-      const canon = campaign.trim();
-      arr = arr.filter(
-        (l) => ((l.campaign || "").trim() || "(sem campanha)") === canon
-      );
-    }
-
-    if (q.trim()) {
-      const t = q.trim().toLowerCase();
-      arr = arr.filter(
-        (l) =>
-          (l.nome || "").toLowerCase().includes(t) ||
-          (l.telefone || "").toLowerCase().includes(t) ||
-          (l.cidade || "").toLowerCase().includes(t)
-      );
-    }
-    return arr;
-  }, [visibleForRole, q, campaign]);
-
-  // Agrupa por etapa
-  const itemsByStage = useMemo(() => {
-    const obj = Object.fromEntries(KANBAN_STAGES.map((s) => [s, []]));
-    for (const lead of filtered) {
-      const stage = lead.stage || "Novo";
-      if (!obj[stage]) obj[stage] = [];
-      obj[stage].push(lead);
-    }
-    return obj;
-  }, [filtered]);
-
-  // onMove resiliente: aceita (leadId, toStage) ou (fromStage, toStage, leadId)
-  const onMove = useCallback(
-    async (...args) => {
-      if (!shopId) return;
-      let leadId, toStage;
-
-      if (args.length === 2) {
-        // (leadId, toStage)
-        [leadId, toStage] = args;
-      } else if (args.length === 3) {
-        // (fromStage, toStage, leadId)
-        [, toStage, leadId] = args;
-      } else {
-        return;
+    const qq = normTxt(q);
+    return rows.filter((r) => {
+      // campanha
+      if (campaign) {
+        const rc = (r.campanha || r.campaign || "").trim();
+        if (normTxt(rc) !== normTxt(campaign)) return false;
       }
+      // busca por nome/telefone/código
+      if (!qq) return true;
+      const blob =
+        `${r.nome || ""} ${r.name || ""} ${r.telefone || ""} ${r.celular || ""} ${r.codigo || ""}`;
+      return normTxt(blob).includes(qq);
+    });
+  }, [rows, q, campaign]);
 
-      // só envia os 2 campos que as rules permitem para seller
-      await moveLeadStage(shopId, leadId, toStage);
+  // Agrupa por estágio (respeitando labels canônicas)
+  const itemsByStage = useMemo(() => {
+    const acc = {};
+    KANBAN_STAGES.forEach((s) => (acc[s] = []));
+    filtered.forEach((r) => {
+      const label = canonLabel(r.stage || "Novo");
+      if (!acc[label]) acc[label] = [];
+      acc[label].push(r);
+    });
+    return acc;
+  }, [filtered, canonLabel]);
+
+  // onMove robusto: aceita (from,to,id) | ({from,to,id}) | (from,to,{id})
+  const onMove = useCallback(
+    async (a, b, c) => {
+      try {
+        let from, to, id;
+        if (typeof a === "object" && a) {
+          ({ from, to, id } = a);
+        } else if (typeof c === "object" && c) {
+          from = a;
+          to = b;
+          id = c.id || c.leadId || c;
+        } else {
+          from = a;
+          to = b;
+          id = c;
+        }
+
+        // normaliza labels
+        from = from ? canonLabel(from) : "";
+        to = to ? canonLabel(to) : "";
+        if (!id || !to || !from || from === to) return;
+
+        // update otimista local
+        setRows((prev) => {
+          const i = prev.findIndex((x) => leadId(x) === id);
+          if (i === -1) return prev;
+          const clone = [...prev];
+          clone[i] = { ...clone[i], stage: to };
+          return clone;
+        });
+
+        // persistência
+        await moveLeadStage(shopId, { from, to, id });
+      } catch (err) {
+        console.error("[useKanban] onMove error:", err);
+        toast.error("Falha ao mover lead.");
+        // (opcional) você pode reverter o otimista se quiser
+      }
     },
-    [shopId]
+    [shopId, canonLabel]
   );
-
-  const counts = useMemo(() => {
-    const c = {};
-    for (const s of KANBAN_STAGES) c[s] = (itemsByStage[s] || []).length;
-    return c;
-  }, [itemsByStage]);
 
   return {
     loading,
     itemsByStage,
     onMove,
-    q, setQ,
-    counts,
-    campaigns, campaign, setCampaign,
+    q,
+    setQ,
+    campaigns,
+    campaign,
+    setCampaign,
   };
 }
+
+export default useKanban;
