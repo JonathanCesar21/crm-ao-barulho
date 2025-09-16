@@ -11,7 +11,6 @@ import {
 } from "../../services/leadsService";
 import {
   listCampaigns,
-  createCampaign,
   deleteCampaign,
 } from "../../services/campaignsService";
 import toast from "react-hot-toast";
@@ -23,16 +22,14 @@ function norm(s = "") {
   return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }
 
-/* ======= Modal criar/importar campanha ======= */
-function CampaignModal({ open, onClose, onCreate, shopId, onImported }) {
-  const [tab, setTab] = useState("create"); // "create" | "import"
-
-  // criar campanha
-  const [name, setName] = useState("");
-  const [desc, setDesc] = useState("");
-
+/* ======= Modal: apenas IMPORTAR CSV + selecionar vendedor ======= */
+function CampaignModal({ open, onClose, shopId, onImported }) {
   // importar csv
   const [targetCampaign, setTargetCampaign] = useState("");
+  const [assignTo, setAssignTo] = useState(""); // uid do vendedor ou "" para não atribuir
+  const [loadingSellers, setLoadingSellers] = useState(false);
+  const [sellers, setSellers] = useState([]);
+
   const [file, setFile] = useState(null);
   const [rowsPreview, setRowsPreview] = useState([]);
   const [csvError, setCsvError] = useState("");
@@ -121,14 +118,27 @@ function CampaignModal({ open, onClose, onCreate, shopId, onImported }) {
   useEffect(() => {
     if (!open) return;
     // reset ao abrir
-    setTab("create");
-    setName("");
-    setDesc("");
     setTargetCampaign("");
+    setAssignTo("");
     setFile(null);
     setRowsPreview([]);
     setCsvError("");
-  }, [open]);
+
+    // carrega vendedores
+    (async () => {
+      if (!shopId) return;
+      try {
+        setLoadingSellers(true);
+        const list = await listSellersOfShop(shopId);
+        setSellers(list || []);
+      } catch (e) {
+        console.error(e);
+        toast.error("Falha ao carregar vendedores.");
+      } finally {
+        setLoadingSellers(false);
+      }
+    })();
+  }, [open, shopId]);
 
   /* ===== CSV: pré-visualização ===== */
   async function handleFileChange(f) {
@@ -188,9 +198,9 @@ function CampaignModal({ open, onClose, onCreate, shopId, onImported }) {
   async function onImportCsv() {
     setCsvError("");
 
-    const campaign = (targetCampaign || name || "").trim();
+    const campaign = (targetCampaign || "").trim();
     if (!campaign) {
-      setCsvError("Informe a campanha de destino (use o nome digitado na aba Criar ou preencha aqui).");
+      setCsvError("Informe o nome da campanha de destino.");
       return;
     }
     if (!file) {
@@ -266,6 +276,7 @@ function CampaignModal({ open, onClose, onCreate, shopId, onImported }) {
             campaign,
             campanha: campaign,
             stage: "Novo",
+            sellerUid: assignTo || null, // atribui todos ao vendedor selecionado (ou deixa null)
           };
         })
         .filter(Boolean);
@@ -276,10 +287,7 @@ function CampaignModal({ open, onClose, onCreate, shopId, onImported }) {
 
       toast.success(`Importados ${payload.length} leads em "${campaign}".`);
       onImported?.();
-      setFile(null);
-      setRowsPreview([]);
-      setTargetCampaign(campaign);
-      setTab("create");
+      // mantém campaign/assignTo e preview se quiser repetir import
     } catch (e) {
       console.error(e);
       setCsvError(e.message || "Falha ao importar CSV.");
@@ -299,19 +307,7 @@ function CampaignModal({ open, onClose, onCreate, shopId, onImported }) {
       <div className="ml-modalPanel" onClick={(e) => e.stopPropagation()}>
         <div className="ml-modalHeader">
           <div className="ml-tabs">
-            <button
-              className={`ml-tab ${tab === "create" ? "is-active" : ""}`}
-              onClick={() => setTab("create")}
-            >
-              Criar campanha
-            </button>
-            <button
-              className={`ml-tab ${tab === "import" ? "is-active" : ""}`}
-              onClick={() => {
-                setTargetCampaign((t) => t || name);
-                setTab("import");
-              }}
-            >
+            <button className="ml-tab is-active" disabled>
               Importar CSV
             </button>
           </div>
@@ -319,142 +315,120 @@ function CampaignModal({ open, onClose, onCreate, shopId, onImported }) {
         </div>
 
         <div className="ml-modalBody">
-          {tab === "create" && (
-            <>
-              <div className="ml-field">
-                <label className="ml-label">Nome da campanha</label>
-                <input
-                  className="ml-input"
-                  placeholder="Ex.: Black Friday 2025"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-                <div className="ml-help">Esse nome deve coincidir com o campo <b>campanha</b> dos leads.</div>
-              </div>
-              <div className="ml-field">
-                <label className="ml-label">Descrição (opcional)</label>
-                <textarea
-                  className="ml-textarea"
-                  rows={4}
-                  placeholder="Notas internas sobre a campanha"
-                  value={desc}
-                  onChange={(e) => setDesc(e.target.value)}
-                />
-              </div>
-            </>
-          )}
+          <div className="ml-field">
+            <label className="ml-label">Campanha de destino *</label>
+            <input
+              className="ml-input"
+              placeholder="Ex.: Black Friday 2025"
+              value={targetCampaign}
+              onChange={(e) => setTargetCampaign(e.target.value)}
+            />
+            <div className="ml-help">
+              Os leads importados receberão <b>campanha = "{targetCampaign || "—"}"</b>.
+            </div>
+          </div>
 
-          {tab === "import" && (
-            <>
-              <div className="ml-field">
-                <label className="ml-label">Campanha de destino</label>
-                <input
-                  className="ml-input"
-                  placeholder="Use o nome digitado na aba Criar ou preencha aqui"
-                  value={targetCampaign}
-                  onChange={(e) => setTargetCampaign(e.target.value)}
-                />
-                <div className="ml-help">
-                  Os leads importados receberão <b>campanha = "{targetCampaign || name || "—"}"</b>.
+          <div className="ml-field">
+            <label className="ml-label">Atribuir todos para (opcional)</label>
+            {loadingSellers ? (
+              <div className="ml-help">Carregando vendedores…</div>
+            ) : (
+              <select
+                className="ml-input"
+                value={assignTo}
+                onChange={(e) => setAssignTo(e.target.value)}
+              >
+                <option value="">— Não atribuir (todos verão) —</option>
+                {sellers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.displayName || s.email || s.id}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div className="ml-field">
+            <label className="ml-label">Arquivo CSV</label>
+            <div
+              className="ml-dropzone"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const f = e.dataTransfer.files?.[0];
+                if (f) handleFileChange(f);
+              }}
+            >
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(e) => handleFileChange(e.target.files?.[0])}
+              />
+              {file ? (
+                <div className="ml-drop-info">
+                  <b>{file.name}</b> — {(file.size / 1024).toFixed(1)} KB
                 </div>
-              </div>
-
-              <div className="ml-field">
-                <label className="ml-label">Arquivo CSV</label>
-                <div
-                  className="ml-dropzone"
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    const f = e.dataTransfer.files?.[0];
-                    if (f) handleFileChange(f);
-                  }}
-                >
-                  <input
-                    type="file"
-                    accept=".csv,text/csv"
-                    onChange={(e) => handleFileChange(e.target.files?.[0])}
-                  />
-                  {file ? (
-                    <div className="ml-drop-info">
-                      <b>{file.name}</b> — {(file.size / 1024).toFixed(1)} KB
-                    </div>
-                  ) : (
-                    <div className="ml-drop-hint">
-                      Arraste o arquivo aqui ou clique para selecionar.
-                      <div className="ml-help">
-                        Campos recomendados no CSV: <b>Código, Nome completo, Primeiro nome (opcional), Celular, Gênero, Idade, Última data de compra/venda</b>.
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <a
-                  className="ml-btn"
-                  href={`data:text/csv;charset=utf-8,${encodeURIComponent(sampleCsv)}`}
-                  download="modelo-importacao.csv"
-                >
-                  Baixar modelo CSV
-                </a>
-              </div>
-
-              {csvError && <div className="ml-error">{csvError}</div>}
-
-              {!!rowsPreview.length && (
-                <div className="ml-preview">
-                  <div className="ml-preview-title">Prévia (primeiras linhas)</div>
-                  <div className="ml-tableWrap">
-                    <table className="ml-table">
-                      <thead>
-                        <tr>
-                          <th>Código</th>
-                          <th>Nome completo</th>
-                          <th>Primeiro nome</th>
-                          <th>Celular</th>
-                          <th>Gênero</th>
-                          <th>Idade</th>
-                          <th>Última data</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rowsPreview.map((r, i) => (
-                          <tr key={i}>
-                            <td>{r.codigo}</td>
-                            <td>{r.nomeCompleto}</td>
-                            <td>{r.primeiroNome}</td>
-                            <td>{r.celular}</td>
-                            <td>{r.genero}</td>
-                            <td>{r.idade}</td>
-                            <td>{r.ultimaData || "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              ) : (
+                <div className="ml-drop-hint">
+                  Arraste o arquivo aqui ou clique para selecionar.
+                  <div className="ml-help">
+                    Campos recomendados no CSV:{" "}
+                    <b>Código, Nome completo, Primeiro nome (opcional), Celular, Gênero, Idade, Última data de compra/venda</b>.
                   </div>
                 </div>
               )}
-            </>
+            </div>
+            <a
+              className="ml-btn"
+              href={`data:text/csv;charset=utf-8,${encodeURIComponent(sampleCsv)}`}
+              download="modelo-importacao.csv"
+            >
+              Baixar modelo CSV
+            </a>
+          </div>
+
+          {csvError && <div className="ml-error">{csvError}</div>}
+
+          {!!rowsPreview.length && (
+            <div className="ml-preview">
+              <div className="ml-preview-title">Prévia (primeiras linhas)</div>
+              <div className="ml-tableWrap">
+                <table className="ml-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Nome completo</th>
+                      <th>Primeiro nome</th>
+                      <th>Celular</th>
+                      <th>Gênero</th>
+                      <th>Idade</th>
+                      <th>Última data</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rowsPreview.map((r, i) => (
+                      <tr key={i}>
+                        <td>{r.codigo}</td>
+                        <td>{r.nomeCompleto}</td>
+                        <td>{r.primeiroNome}</td>
+                        <td>{r.celular}</td>
+                        <td>{r.genero}</td>
+                        <td>{r.idade}</td>
+                        <td>{r.ultimaData || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
         </div>
 
         <div className="ml-modalFooter">
-          {tab === "create" ? (
-            <>
-              <button className="ml-btn" onClick={onClose}>Cancelar</button>
-              <button
-                className="ml-btn ml-btn-primary"
-                onClick={() => onCreate({ name: name.trim(), description: desc.trim() })}
-              >
-                Criar
-              </button>
-            </>
-          ) : (
-            <>
-              <button className="ml-btn" onClick={onClose}>Cancelar</button>
-              <button className="ml-btn ml-btn-primary" onClick={onImportCsv}>
-                Importar
-              </button>
-            </>
-          )}
+          <button className="ml-btn" onClick={onClose}>Cancelar</button>
+          <button className="ml-btn ml-btn-primary" onClick={onImportCsv}>
+            Importar
+          </button>
         </div>
       </div>
     </div>
@@ -482,7 +456,7 @@ export default function ManagerLeads() {
     return () => unsub && unsub();
   }, [shopId]);
 
-  // Carrega vendedores
+  // Carrega vendedores (para atribuição na tabela de leads)
   useEffect(() => {
     (async () => {
       if (!shopId) return;
@@ -502,14 +476,14 @@ export default function ManagerLeads() {
       const list = (await listCampaigns?.(shopId)) || [];
       setCampaigns(list);
     } catch (e) {
-      // fallback: derivar a partir dos leads
-      const set = new Map();
+      // fallback: derivar a partir dos leads (ignorando "sem campanha")
+      const setMap = new Map();
       rows.forEach((r) => {
         const c = (r.campanha || r.campaign || "").trim();
-        if (!c) return;
-        set.set(c, { id: c, name: c, leadCount: (set.get(c)?.leadCount || 0) + 1 });
+        if (!c) return; // 👈 não conta "sem campanha"
+        setMap.set(c, { id: c, name: c, leadCount: (setMap.get(c)?.leadCount || 0) + 1 });
       });
-      setCampaigns(Array.from(set.values()));
+      setCampaigns(Array.from(setMap.values()));
     }
   }
   useEffect(() => { refreshCampaigns(); /* eslint-disable-next-line */ }, [shopId, rows.length]);
@@ -535,48 +509,37 @@ export default function ManagerLeads() {
     }
   }
 
-  // Criar campanha
-  async function handleCreateCampaign({ name, description }) {
-    if (!name) {
-      toast.error("Informe um nome para a campanha.");
-      return;
-    }
-    try {
-      await createCampaign?.(shopId, { name, description: description || "" });
-      toast.success("Campanha criado.");
-      setOpenModal(false);
-      refreshCampaigns();
-    } catch (e) {
-      console.error(e);
-      toast.error("Falha ao criar campanha.");
-    }
-  }
-
-  // Excluir campanha
+  // Excluir campanha (escolha limpar ou deletar leads)
   async function handleDeleteCampaign(c) {
     const title = c?.name || c?.id || "";
     const ok = window.confirm(
-      `Excluir a campanha "${title}"?\n\nAtenção: você deve decidir no backend se os leads serão removidos, movidos para outra campanha ou terão o campo campanha limpo.`
+      `Excluir a campanha "${title}"?\n\nOK = limpar campanha dos leads (manter leads)\nCancelar = APAGAR os leads dessa campanha`
     );
-    if (!ok) return;
+    const mode = ok ? "clear" : "deleteLeads";
+
     try {
-      await deleteCampaign?.(shopId, c.id || c.name);
-      toast.success("Campanha excluída.");
+      const res = await deleteCampaign?.(shopId, title, { mode });
+      const msg =
+        mode === "deleteLeads"
+          ? `Campanha excluída. ${res.total} leads afetados (${res.deleted} deletados).`
+          : `Campanha excluída. ${res.total} leads afetados (${res.updated} limpos).`;
+      toast.success(msg);
+
       if (campaignFilter === (c.name || c.id)) setCampaignFilter("");
-      refreshCampaigns();
+      await refreshCampaigns();
     } catch (e) {
       console.error(e);
       toast.error("Falha ao excluir campanha.");
     }
   }
 
-  // campanhas com contagem derivada (fallback)
+  // campanhas com contagem derivada (fallback), ignorando vazias
   const countsByCampaign = useMemo(() => {
     const m = new Map();
     rows.forEach((r) => {
       const c = (r.campanha || r.campaign || "").trim();
-      const key = c || "__sem";
-      m.set(key, (m.get(key) || 0) + 1);
+      if (!c) return; // 👈 não agrupa “sem campanha”
+      m.set(c, (m.get(c) || 0) + 1);
     });
     return m;
   }, [rows]);
@@ -585,9 +548,7 @@ export default function ManagerLeads() {
     const q = norm(searchCampaign);
     const arr = (campaigns && campaigns.length
       ? campaigns
-      : Array.from(countsByCampaign.entries())
-        .filter(([k]) => k !== "__sem")
-        .map(([k, v]) => ({ id: k, name: k, leadCount: v }))
+      : Array.from(countsByCampaign.entries()).map(([k, v]) => ({ id: k, name: k, leadCount: v }))
     );
     return arr
       .filter((c) => (q ? norm(c.name).includes(q) : true))
@@ -597,9 +558,6 @@ export default function ManagerLeads() {
   // leads filtrados pela campanha no lado direito
   const rowsByCampaign = useMemo(() => {
     if (!campaignFilter) return rows;
-    if (campaignFilter === "__sem") {
-      return rows.filter((r) => !(r.campanha || r.campaign));
-    }
     return rows.filter((r) => {
       const c = (r.campanha || r.campaign || "").trim();
       return norm(c) === norm(campaignFilter);
@@ -661,17 +619,7 @@ export default function ManagerLeads() {
                 </div>
               ))}
 
-              {/* sem campanha */}
-              {countsByCampaign.get("__sem") ? (
-                <button
-                  className={`ml-campaign ${campaignFilter === "__sem" ? "is-active" : ""}`}
-                  onClick={() => setCampaignFilter("__sem")}
-                  title="Leads sem campanha"
-                >
-                  <div className="ml-camp-name">Sem campanha</div>
-                  <div className="ml-camp-count">{countsByCampaign.get("__sem")}</div>
-                </button>
-              ) : null}
+              {/* Removido o bloco "Sem campanha" */}
             </div>
           </div>
         </section>
@@ -683,7 +631,7 @@ export default function ManagerLeads() {
               <div>
                 <h3 className="ml-title">Leads</h3>
                 <div className="ml-subtle">
-                  {campaignFilter ? <>Filtrando por <b>{campaignFilter === "__sem" ? "Sem campanha" : campaignFilter}</b>.</> : "Todas as campanhas."}
+                  {campaignFilter ? <>Filtrando por <b>{campaignFilter}</b>.</> : "Todas as campanhas."}
                 </div>
               </div>
             </div>
@@ -702,8 +650,15 @@ export default function ManagerLeads() {
       <CampaignModal
         open={openModal}
         onClose={() => setOpenModal(false)}
-        onCreate={handleCreateCampaign}
-        shopId={shopId}            // <<<<<< PASSA O shopId AQUI
+        shopId={shopId}
+        onImported={() => {
+          setOpenModal(false);
+          // atualiza a lista após importar
+          setTimeout(() => {
+            // Firestore propaga; subscribeLeadsByShop já atualiza a grid
+            refreshCampaigns();
+          }, 250);
+        }}
       />
     </div>
   );
